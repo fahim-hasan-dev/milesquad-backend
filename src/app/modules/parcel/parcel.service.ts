@@ -17,6 +17,7 @@ import { JwtPayload } from "jsonwebtoken";
 import { NotificationService } from "../notification/notification.service";
 import { USER_ROLES } from "../../../enum/user";
 import { Review } from "../review/review.model";
+import { calculateParcelPricing } from "../../../utils/pricingCalculator.util";
 
 const calculateParcelDistanceAndPrice = async (query: Record<string, any>) => {
     const { pickupLat, pickupLng, dropLat, dropLng } = query;
@@ -51,74 +52,62 @@ const calculateParcelDistanceAndPrice = async (query: Record<string, any>) => {
         await redisClient.set(cacheKey, JSON.stringify(distanceData), "EX", 3600);
     }
 
-    const settings = await SettingServices.getSettings();
-    if (!settings) {
-        throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Pricing settings not configured.");
-    }
-
-    const perKiloCost = settings.perKiloCost || 0;
-    const distanceKm = distanceData.distanceKm;
-
-    const vehicleFares = settings.vehicleBaseFares || {};
-    const vehicles = {
-        motorcycle: {
-            baseFare: vehicleFares.motorcycle || 0,
-            totalPrice: Math.ceil((vehicleFares.motorcycle || 0) + distanceKm * perKiloCost),
-        },
-        tricycle: {
-            baseFare: vehicleFares.tricycle || 0,
-            totalPrice: Math.ceil((vehicleFares.tricycle || 0) + distanceKm * perKiloCost),
-        },
-        van: {
-            baseFare: vehicleFares.van || 0,
-            totalPrice: Math.ceil((vehicleFares.van || 0) + distanceKm * perKiloCost),
-        },
-        car: {
-            baseFare: (vehicleFares as any).car || vehicleFares.van || 0,
-            totalPrice: Math.ceil(((vehicleFares as any).car || vehicleFares.van || 0) + distanceKm * perKiloCost),
-        },
-        truck: {
-            baseFare: (vehicleFares as any).truck || (vehicleFares.van ? vehicleFares.van * 1.5 : 0),
-            totalPrice: Math.ceil(((vehicleFares as any).truck || (vehicleFares.van ? vehicleFares.van * 1.5 : 0)) + distanceKm * perKiloCost),
-        },
-    };
-
     return {
-        distanceKm,
+        distanceKm: distanceData.distanceKm,
         duration: distanceData.durationText,
-        distanceSource: distanceData.source,
-        perKiloCost,
-        vehicles,
     };
 };
 
 const createParcel = async (payload: IParcel, user: JwtPayload) => {
     payload.deliveryDate = new Date(payload.deliveryDate);
 
-    const calculation = await calculateParcelDistanceAndPrice({
+    const distanceData = await calculateParcelDistanceAndPrice({
         pickupLat: payload.pickupLocation.coordinates[1],
         pickupLng: payload.pickupLocation.coordinates[0],
         dropLat: payload.dropLocation.coordinates[1],
         dropLng: payload.dropLocation.coordinates[0],
     });
 
-    const vt = payload.vehicleType.toLowerCase() as keyof typeof calculation.vehicles;
-    const vehicleData = calculation.vehicles[vt];
-
-    if (!vehicleData) {
-        throw new ApiError(StatusCodes.BAD_REQUEST, `Invalid vehicle type: ${payload.vehicleType}`);
-    }
-
-    payload.distance = calculation.distanceKm;
-    payload.duration = calculation.duration;
-    payload.baseFare = vehicleData.baseFare;
-    payload.totalDeliveryFee = vehicleData.totalPrice;
+    payload.distance = distanceData.distanceKm;
+    payload.duration = distanceData.duration;
 
     const settings = await SettingServices.getSettings();
-    const commissionPercentage = settings?.platformCommissionPercentage || 0;
+    if (!settings) {
+        throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Pricing settings not configured.");
+    }
 
-    payload.platformCommission = Number(((payload.totalDeliveryFee * commissionPercentage) / 100).toFixed(2));
-    payload.driverShare = Number((payload.totalDeliveryFee - payload.platformCommission).toFixed(2));
+    const vt = payload.vehicleType.toLowerCase() as 'motorcycle' | 'tricycle' | 'car' | 'van' | 'truck';
+    const fareSettings = settings.fareSettings || {} as any;
+    const fareObj = fareSettings[vt];
+
+    const isScheduled = payload.sameDayPickup === false || (payload.deliveryDate > new Date());
+
+    const pricingResult = calculateParcelPricing({
+        dimension: payload.dimension,
+        totalWeight: payload.totalWeight,
+        distanceKm: payload.distance,
+        durationText: payload.duration,
+        itemValue: payload.itemValue,
+        fareSetting: fareObj,
+        isScheduled,
+    });
+
+    payload.baseFare = pricingResult.baseFare;
+    payload.totalDeliveryFee = pricingResult.totalDeliveryFee;
+    payload.platformCommission = pricingResult.platformCommission;
+    payload.driverShare = pricingResult.driverShare;
+    payload.volume = pricingResult.volume;
+    payload.volumeUtilization = pricingResult.volumeUtilization;
+    payload.weightUtilization = pricingResult.weightUtilization;
+    payload.effectiveUtilization = pricingResult.effectiveUtilization;
+    payload.loadFactor = pricingResult.loadFactor;
+    payload.fuelCost = pricingResult.fuelCost;
+    payload.timeCost = pricingResult.timeCost;
+    payload.goodRisks = pricingResult.goodRisks;
+    payload.subtotalFee = pricingResult.subtotalFee;
+    payload.operationFee = pricingResult.operationFee;
+    payload.platformFee = pricingResult.platformFee;
+
     payload.sender = new Types.ObjectId(user.authId || user.id);
 
     const parcel = await Parcel.create(payload);
@@ -129,7 +118,7 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
         { delay: 60 * 60 * 1000 }
     );
 
-    const paymentLink = await createPaymentSession(user, vehicleData.totalPrice, parcel._id.toString());
+    const paymentLink = await createPaymentSession(user, pricingResult.totalDeliveryFee, parcel._id.toString());
 
     return { parcel, paymentLink };
 };

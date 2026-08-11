@@ -32,6 +32,17 @@ export type IParcel = {
     totalDeliveryFee: number;
     driverShare: number;
     platformCommission: number;
+    volume?: number;
+    volumeUtilization?: number;
+    weightUtilization?: number;
+    effectiveUtilization?: number;
+    loadFactor?: number;
+    fuelCost?: number;
+    timeCost?: number;
+    goodRisks?: number;
+    subtotalFee?: number;
+    operationFee?: number;
+    platformFee?: number;
     paymentId?: string;
     sender: Types.ObjectId;
     deliveryDate: Date;
