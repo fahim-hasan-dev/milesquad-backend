@@ -18,8 +18,9 @@ import { NotificationService } from "../notification/notification.service";
 import { USER_ROLES } from "../../../enum/user";
 import { Review } from "../review/review.model";
 import { calculateParcelPricing } from "../../../utils/pricingCalculator.util";
+import { User } from "../user/user.model";
 
-const calculateParcelDistanceAndPrice = async (query: Record<string, any>) => {
+const getOrCalculateParcelDistance = async (query: Record<string, any>) => {
     const { pickupLat, pickupLng, dropLat, dropLng } = query;
 
     if (!pickupLat || !pickupLng || !dropLat || !dropLng) {
@@ -29,98 +30,121 @@ const calculateParcelDistanceAndPrice = async (query: Record<string, any>) => {
         );
     }
 
-    const fromLat = Number(pickupLat);
-    const fromLng = Number(pickupLng);
-    const toLat = Number(dropLat);
-    const toLng = Number(dropLng);
+    const pickupLatitude = Number(pickupLat);
+    const pickupLongitude = Number(pickupLng);
+    const dropLatitude = Number(dropLat);
+    const dropLongitude = Number(dropLng);
 
-    if (isNaN(fromLat) || isNaN(fromLng) || isNaN(toLat) || isNaN(toLng)) {
+    if (isNaN(pickupLatitude) || isNaN(pickupLongitude) || isNaN(dropLatitude) || isNaN(dropLongitude)) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "Coordinates must be valid numbers.");
     }
 
-    const cacheKey = `dist_cache:${fromLat.toFixed(5)}:${fromLng.toFixed(5)}:${toLat.toFixed(5)}:${toLng.toFixed(5)}`;
-    const cachedData = await redisClient.get(cacheKey);
-    let distanceData;
+    const distanceCacheKey = `dist_cache:${pickupLatitude.toFixed(5)}:${pickupLongitude.toFixed(5)}:${dropLatitude.toFixed(5)}:${dropLongitude.toFixed(5)}`;
+    const cachedDistanceData = await redisClient.get(distanceCacheKey);
+    let calculatedDistance;
 
-    if (cachedData) {
-        distanceData = JSON.parse(cachedData);
+    if (cachedDistanceData) {
+        calculatedDistance = JSON.parse(cachedDistanceData);
     } else {
-        distanceData = await getDistanceAndDuration(
-            { lat: fromLat, lng: fromLng },
-            { lat: toLat, lng: toLng }
+        calculatedDistance = await getDistanceAndDuration(
+            { lat: pickupLatitude, lng: pickupLongitude },
+            { lat: dropLatitude, lng: dropLongitude }
         );
-        await redisClient.set(cacheKey, JSON.stringify(distanceData), "EX", 3600);
+        await redisClient.set(distanceCacheKey, JSON.stringify(calculatedDistance), "EX", 3600);
     }
 
     return {
-        distanceKm: distanceData.distanceKm,
-        duration: distanceData.durationText,
+        distanceKm: calculatedDistance.distanceKm,
+        duration: calculatedDistance.durationText,
     };
 };
 
 const createParcel = async (payload: IParcel, user: JwtPayload) => {
+    delete (payload as any).distance;
+    delete (payload as any).duration;
+
     payload.deliveryDate = new Date(payload.deliveryDate);
 
-    const distanceData = await calculateParcelDistanceAndPrice({
+    const calculatedDistanceData = await getOrCalculateParcelDistance({
         pickupLat: payload.pickupLocation.coordinates[1],
         pickupLng: payload.pickupLocation.coordinates[0],
         dropLat: payload.dropLocation.coordinates[1],
         dropLng: payload.dropLocation.coordinates[0],
     });
 
-    payload.distance = distanceData.distanceKm;
-    payload.duration = distanceData.duration;
+    payload.distance = calculatedDistanceData.distanceKm;
+    payload.duration = calculatedDistanceData.duration;
 
-    const settings = await SettingServices.getSettings();
-    if (!settings) {
+    const systemSettings = await SettingServices.getSettings();
+    if (!systemSettings) {
         throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Pricing settings not configured.");
     }
 
-    const vt = payload.vehicleType.toLowerCase() as 'motorcycle' | 'tricycle' | 'car' | 'van' | 'truck';
-    const fareSettings = settings.fareSettings || {} as any;
-    const fareObj = fareSettings[vt];
+    const selectedVehicleType = payload.vehicleType.toLowerCase() as 'motorcycle' | 'tricycle' | 'car' | 'van' | 'truck';
+    const allFareSettings = systemSettings.fareSettings || {} as any;
+    const selectedVehicleFareSettings = allFareSettings[selectedVehicleType];
 
-    const isScheduled = payload.sameDayPickup === false || (payload.deliveryDate > new Date());
+    const isScheduledDelivery = payload.sameDayPickup === false || (payload.deliveryDate > new Date());
 
-    const pricingResult = calculateParcelPricing({
+    const calculatedPricing = calculateParcelPricing({
         dimension: payload.dimension,
         totalWeight: payload.totalWeight,
         distanceKm: payload.distance,
         durationText: payload.duration,
         itemValue: payload.itemValue,
-        fareSetting: fareObj,
-        isScheduled,
+        fareSetting: selectedVehicleFareSettings,
+        isScheduled: isScheduledDelivery,
     });
 
-    payload.baseFare = pricingResult.baseFare;
-    payload.totalDeliveryFee = pricingResult.totalDeliveryFee;
-    payload.platformCommission = pricingResult.platformCommission;
-    payload.driverShare = pricingResult.driverShare;
-    payload.volume = pricingResult.volume;
-    payload.volumeUtilization = pricingResult.volumeUtilization;
-    payload.weightUtilization = pricingResult.weightUtilization;
-    payload.effectiveUtilization = pricingResult.effectiveUtilization;
-    payload.loadFactor = pricingResult.loadFactor;
-    payload.fuelCost = pricingResult.fuelCost;
-    payload.timeCost = pricingResult.timeCost;
-    payload.goodRisks = pricingResult.goodRisks;
-    payload.subtotalFee = pricingResult.subtotalFee;
-    payload.operationFee = pricingResult.operationFee;
-    payload.platformFee = pricingResult.platformFee;
+    if (selectedVehicleFareSettings) {
+        const vehicleMaxWeight = selectedVehicleFareSettings.maxWeight || 0;
+        const vehicleMaxVolume = selectedVehicleFareSettings.maxVolume || 0;
+        const parcelWeight = payload.totalWeight || 0;
+
+        if (vehicleMaxWeight > 0 && parcelWeight > vehicleMaxWeight) {
+            throw new ApiError(
+                StatusCodes.BAD_REQUEST,
+                `Parcel weight (${parcelWeight} kg) exceeds the maximum allowed limit (${vehicleMaxWeight} kg) for a ${payload.vehicleType}. Please select a larger vehicle.`
+            );
+        }
+
+        if (vehicleMaxVolume > 0 && calculatedPricing.volume > vehicleMaxVolume) {
+            throw new ApiError(
+                StatusCodes.BAD_REQUEST,
+                `Parcel volume (${calculatedPricing.volume} m³) exceeds the maximum allowed limit (${vehicleMaxVolume} m³) for a ${payload.vehicleType}. Please select a larger vehicle.`
+            );
+        }
+    }
+
+    payload.baseFare = calculatedPricing.baseFare;
+    payload.totalDeliveryFee = calculatedPricing.totalDeliveryFee;
+    payload.platformCommission = calculatedPricing.platformCommission;
+    payload.driverShare = calculatedPricing.driverShare;
+    payload.volume = calculatedPricing.volume;
+    payload.volumeUtilization = calculatedPricing.volumeUtilization;
+    payload.weightUtilization = calculatedPricing.weightUtilization;
+    payload.effectiveUtilization = calculatedPricing.effectiveUtilization;
+    payload.loadFactor = calculatedPricing.loadFactor;
+    payload.fuelCost = calculatedPricing.fuelCost;
+    payload.timeCost = calculatedPricing.timeCost;
+    payload.goodRisks = calculatedPricing.goodRisks;
+    payload.subtotalFee = calculatedPricing.subtotalFee;
+    payload.operationFee = calculatedPricing.operationFee;
+    payload.platformFee = calculatedPricing.platformFee;
 
     payload.sender = new Types.ObjectId(user.authId || user.id);
 
-    const parcel = await Parcel.create(payload);
+    const createdParcel = await Parcel.create(payload);
 
     await parcelCleanupQueue.add(
         'cleanupUnpaidParcel',
-        { parcelId: parcel._id.toString() },
+        { parcelId: createdParcel._id.toString() },
         { delay: 60 * 60 * 1000 }
     );
 
-    const paymentLink = await createPaymentSession(user, pricingResult.totalDeliveryFee, parcel._id.toString());
+    const paymentLink = await createPaymentSession(user, calculatedPricing.totalDeliveryFee, createdParcel._id.toString());
 
-    return { parcel, paymentLink };
+    return { parcel: createdParcel, paymentLink };
 };
 
 const getAllParcels = async (query: Record<string, unknown>) => {
@@ -179,7 +203,8 @@ const getNearbyParcels = async (
     lat: number,
     lng: number,
     maxDistanceKm: number = 50,
-    query: Record<string, unknown>
+    user?: JwtPayload,
+    query: Record<string, unknown> = {}
 ) => {
     if (!lat || !lng) {
         throw new ApiError(StatusCodes.BAD_REQUEST, "Latitude and Longitude are required.");
@@ -192,11 +217,19 @@ const getNearbyParcels = async (
     const oneHourFromNow = new Date();
     oneHourFromNow.setHours(oneHourFromNow.getHours() + 1);
 
-    const matchQuery = {
+    const matchQuery: Record<string, any> = {
         status: PARCEL_STATUS.PENDING,
         isDriverAssigned: false,
         deliveryDate: { $lte: oneHourFromNow }
     };
+
+    if (user) {
+        const userId = user.authId || user.id;
+        const driver = await User.findById(userId).select("driverInfo.vehicleType").lean();
+        if (driver?.driverInfo?.vehicleType) {
+            matchQuery.vehicleType = driver.driverInfo.vehicleType;
+        }
+    }
 
     const parcels = await Parcel.aggregate([
         {
@@ -562,7 +595,7 @@ export const ParcelServices = {
     getNearbyParcels,
     acceptParcel,
     getSingleParcel,
-    calculateParcelDistanceAndPrice,
+    getOrCalculateParcelDistance,
     updateParcel,
     cancelParcel,
     deleteParcel,

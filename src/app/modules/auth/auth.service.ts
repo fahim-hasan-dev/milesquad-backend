@@ -1,5 +1,5 @@
 import { StatusCodes } from 'http-status-codes';
-import { IAuthResponse, IResetPassword } from './auth.interface';
+import { IAuthResponse } from './auth.interface';
 import { User } from '../user/user.model';
 import ApiError from '../../../errors/ApiError';
 import { USER_ROLES, USER_STATUS } from '../../../enum/user';
@@ -10,20 +10,19 @@ import { JwtPayload } from 'jsonwebtoken';
 import { jwtHelper } from '../../../helpers/jwtHelper';
 import config from '../../../config';
 import bcrypt from 'bcrypt';
-import cryptoToken, { generateOtp } from '../../../utils/crypto';
-import { Token } from '../token/token.model';
+import { generateOtp } from '../../../utils/crypto';
 import { IUser } from '../user/user.interface';
 import sendSMS from '../../../shared/sendSMS';
 
 export const createUser = async (payload: IUser) => {
   payload.phone = payload.phone?.trim();
 
-  const isUserExist = await User.findOne({
+  const existingUser = await User.findOne({
     phone: payload.phone,
     status: { $nin: [USER_STATUS.DELETED] },
   });
 
-  if (isUserExist) {
+  if (existingUser) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
       `An account with this phone number already exists.`
@@ -65,31 +64,31 @@ const login = async (payload: ILoginData): Promise<IAuthResponse> => {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Phone number is required');
   }
 
-  const isUserExist = await User.findOne({
+  const existingUser = await User.findOne({
     phone,
     status: { $in: [USER_STATUS.ACTIVE, USER_STATUS.RESTRICTED] },
   })
     .select('+password +authentication')
     .lean();
 
-  if (!isUserExist) {
+  if (!existingUser) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
       'No account found with this phone number'
     );
   }
 
-  return await AuthCommonServices.handleLoginLogic(payload, isUserExist);
+  return await AuthCommonServices.handleLoginLogic(payload, existingUser);
 };
 
 const forgetPassword = async (phone: string) => {
   const cleanPhone = phone?.trim();
-  const isUserExist = await User.findOne({
+  const existingUser = await User.findOne({
     phone: cleanPhone,
     status: { $in: [USER_STATUS.ACTIVE, USER_STATUS.RESTRICTED] },
   });
 
-  if (!isUserExist) {
+  if (!existingUser) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
       'No account found with this phone number'
@@ -109,7 +108,7 @@ const forgetPassword = async (phone: string) => {
   };
 
   await User.findByIdAndUpdate(
-    isUserExist._id,
+    existingUser._id,
     { $set: { authentication } },
     { new: true }
   );
@@ -125,24 +124,24 @@ const forgetPassword = async (phone: string) => {
 
 const resetPassword = async (payload: { phone: string; otp: string; newPassword: string }) => {
   const { phone, otp, newPassword } = payload;
-  const isUserExist = await User.findOne({ phone: phone.trim() })
+  const existingUser = await User.findOne({ phone: phone.trim() })
     .select('+authentication');
 
-  if (!isUserExist) {
+  if (!existingUser) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'User not found');
   }
 
-  if (isUserExist.authentication?.oneTimeCode !== otp) {
+  if (existingUser.authentication?.oneTimeCode !== otp) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid OTP');
   }
 
-  if (isUserExist.authentication?.expiresAt && new Date() > isUserExist.authentication.expiresAt) {
+  if (existingUser.authentication?.expiresAt && new Date() > existingUser.authentication.expiresAt) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'OTP has expired');
   }
 
   const hashedPassword = await bcrypt.hash(newPassword, Number(config.bcrypt_salt_rounds));
 
-  await User.findByIdAndUpdate(isUserExist._id, {
+  await User.findByIdAndUpdate(existingUser._id, {
     $set: {
       password: hashedPassword,
       authentication: {
@@ -168,21 +167,21 @@ const verifyAccount = async (
     throw new ApiError(StatusCodes.BAD_REQUEST, 'OTP is required.');
   }
 
-  const isUserExist = await User.findOne({
+  const existingUser = await User.findOne({
     phone: phone.trim(),
     status: { $nin: [USER_STATUS.DELETED] },
   })
     .select('+password +authentication')
     .lean();
 
-  if (!isUserExist) {
+  if (!existingUser) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
       'No account found with this phone number, please register first.'
     );
   }
 
-  const { authentication } = isUserExist;
+  const { authentication } = existingUser;
 
   if (authentication?.oneTimeCode !== onetimeCode) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid OTP, please try again.');
@@ -193,7 +192,7 @@ const verifyAccount = async (
   }
 
   await User.findByIdAndUpdate(
-    isUserExist._id,
+    existingUser._id,
     {
       $set: {
         verified: true,
@@ -211,24 +210,24 @@ const verifyAccount = async (
   );
 
   const tokens = AuthHelper.createToken(
-    isUserExist._id,
-    isUserExist.role,
-    isUserExist.fullName,
-    isUserExist.phone
+    existingUser._id,
+    existingUser.role,
+    existingUser.fullName,
+    existingUser.phone
   );
 
   const userInfo = {
-    id: isUserExist._id,
-    role: isUserExist.role,
-    name: isUserExist.fullName,
-    phone: isUserExist.phone,
-    image: isUserExist.image || '',
+    id: existingUser._id,
+    role: existingUser.role,
+    name: existingUser.fullName,
+    phone: existingUser.phone,
+    image: existingUser.image || '',
   };
 
   return authResponse(
     StatusCodes.OK,
-    `Welcome ${isUserExist.fullName} to our platform.`,
-    isUserExist.role,
+    `Welcome ${existingUser.fullName} to our platform.`,
+    existingUser.role,
     tokens.accessToken,
     tokens.refreshToken,
     undefined,
@@ -268,19 +267,19 @@ const getAccessToken = async (token: string) => {
 };
 
 const resendOtp = async (phone: string) => {
-  const isUserExist = await User.findOne({
+  const existingUser = await User.findOne({
     phone: phone.trim(),
     status: { $in: [USER_STATUS.ACTIVE, USER_STATUS.RESTRICTED] },
   }).select('+authentication');
 
-  if (!isUserExist) {
+  if (!existingUser) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
       'No account found with this phone number.'
     );
   }
 
-  const { authentication } = isUserExist;
+  const { authentication } = existingUser;
   const otp = generateOtp();
   const authenticationPayload = {
     ...authentication,
@@ -298,7 +297,7 @@ const resendOtp = async (phone: string) => {
   }
 
   await User.findByIdAndUpdate(
-    isUserExist._id,
+    existingUser._id,
     { $set: { authentication: authenticationPayload } },
     { new: true }
   );
@@ -318,15 +317,15 @@ const changePassword = async (
   newPassword: string
 ) => {
   const userId = user.authId || user.id;
-  const isUserExist = await User.findById(userId).select('+password').lean();
+  const existingUser = await User.findById(userId).select('+password').lean();
 
-  if (!isUserExist) {
+  if (!existingUser) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
   }
 
   const isPasswordMatch = await AuthHelper.isPasswordMatched(
     currentPassword,
-    isUserExist.password
+    existingUser.password
   );
 
   if (!isPasswordMatch) {
@@ -349,17 +348,17 @@ const changePassword = async (
 
 const deleteAccount = async (user: JwtPayload, password: string) => {
   const userId = user.authId || user.id;
-  const isUserExist = await User.findById(userId).select('+password');
+  const existingUser = await User.findById(userId).select('+password');
 
-  if (!isUserExist) {
+  if (!existingUser) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Failed to delete account.');
   }
 
-  if (isUserExist.status === USER_STATUS.DELETED) {
+  if (existingUser.status === USER_STATUS.DELETED) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Account is already deleted.');
   }
 
-  const isPasswordMatched = await bcrypt.compare(password, isUserExist.password);
+  const isPasswordMatched = await bcrypt.compare(password, existingUser.password);
 
   if (!isPasswordMatched) {
     throw new ApiError(

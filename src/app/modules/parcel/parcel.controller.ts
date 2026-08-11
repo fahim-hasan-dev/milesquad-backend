@@ -42,12 +42,14 @@ const getMyParcels = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getNearbyParcels = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user as JwtPayload;
     const { latitude, longitude, distance } = req.query;
 
     const result = await ParcelServices.getNearbyParcels(
         Number(latitude),
         Number(longitude),
         distance ? Number(distance) : undefined,
+        user,
         req.query
     );
 
@@ -121,12 +123,12 @@ const deleteParcel = catchAsync(async (req: Request, res: Response) => {
 });
 
 const calculateDistance = catchAsync(async (req: Request, res: Response) => {
-    const result = await ParcelServices.calculateParcelDistanceAndPrice(req.query);
+    const result = await ParcelServices.getOrCalculateParcelDistance(req.query);
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
         success: true,
-        message: "Distance and price calculated successfully",
+        message: "Distance calculated successfully",
         data: result,
     });
 });

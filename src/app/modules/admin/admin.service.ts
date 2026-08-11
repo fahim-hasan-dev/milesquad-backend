@@ -50,8 +50,8 @@ const loginAdmin = async (payload: { email: string; password: string }) => {
 
 const createSubAdmin = async (payload: Partial<IAdmin>) => {
     payload.email = payload.email?.trim().toLowerCase();
-    const isExist = await Admin.findOne({ email: payload.email });
-    if (isExist) {
+    const existingAdmin = await Admin.findOne({ email: payload.email });
+    if (existingAdmin) {
         throw new ApiError(StatusCodes.BAD_REQUEST, 'An admin account with this email already exists');
     }
 
@@ -85,15 +85,15 @@ const getSingleAdmin = async (id: string) => {
 };
 
 const updateAdmin = async (id: string, payload: Partial<IAdmin>) => {
-    const isExist = await Admin.findById(id);
-    if (!isExist) {
+    const existingAdmin = await Admin.findById(id);
+    if (!existingAdmin) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'Admin not found');
     }
 
     if (payload.email) {
         payload.email = payload.email.trim().toLowerCase();
-        const isEmailExist = await Admin.findOne({ email: payload.email, _id: { $ne: id } });
-        if (isEmailExist) {
+        const existingEmail = await Admin.findOne({ email: payload.email, _id: { $ne: id } });
+        if (existingEmail) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Email already in use');
         }
     }

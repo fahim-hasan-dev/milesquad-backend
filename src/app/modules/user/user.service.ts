@@ -26,11 +26,11 @@ const getAllUser = async (query: Record<string, unknown>) => {
 };
 
 const getSingleUser = async (id: string) => {
-    const result = await User.findById(id).select('-password -authentication');
-    if (!result) {
+    const user = await User.findById(id).select('-password -authentication');
+    if (!user) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
     }
-    return result;
+    return user;
 };
 
 const deleteUser = async (id: string) => {
@@ -46,9 +46,9 @@ const updateProfile = async (
     payload: Partial<IUser>
 ) => {
     const userId = user.authId || user.id;
-    const isExistUser = await User.findById(userId);
+    const existingUser = await User.findById(userId);
 
-    if (!isExistUser) {
+    if (!existingUser) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'User not found or deleted.');
     }
 
@@ -67,17 +67,17 @@ const updateProfile = async (
 
 const getProfile = async (user: JwtPayload) => {
     const userId = user.authId || user.id;
-    const isExistUser = await User.findById(userId).select('-password -authentication').lean();
-    if (!isExistUser) {
+    const existingUser = await User.findById(userId).select('-password -authentication').lean();
+    if (!existingUser) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'Profile not found or deleted.');
     }
-    return isExistUser;
+    return existingUser;
 };
 
 const deleteMyAccount = async (user: JwtPayload) => {
     const userId = user.authId || user.id;
-    const isExistUser = await User.findById(userId);
-    if (!isExistUser) {
+    const existingUser = await User.findById(userId);
+    if (!existingUser) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'Profile not found or deleted.');
     }
     await User.findByIdAndDelete(userId);
