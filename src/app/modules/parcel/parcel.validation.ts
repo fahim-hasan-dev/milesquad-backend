@@ -12,8 +12,16 @@ const coordinateSchema = z.array(z.number())
 
 const createParcelSchema = z.object({
     body: z.object({
-        name: z.string({ required_error: "Parcel name is required" }),
+        sameDayPickup: z.boolean().optional(),
         itemValue: z.number({ required_error: "Item value is required" }),
+        numberOfGoods: z.number().optional(),
+        goodType: z.string().optional(),
+        totalWeight: z.number().optional(),
+        dimension: z.object({
+            height: z.number().optional(),
+            width: z.number().optional(),
+            length: z.number().optional(),
+        }).optional(),
         pickupLocation: z.object({
             address: z.string({ required_error: "Pickup address is required" }),
             coordinates: coordinateSchema,
@@ -24,16 +32,25 @@ const createParcelSchema = z.object({
         }),
         vehicleType: z.nativeEnum(VEHICLE_TYPE),
         deliveryDate: z.string({ required_error: "Delivery date is required" }),
-        receiverName: z.string({ required_error: "Receiver name is required" }),
         receiverPhone: z.string({ required_error: "Receiver phone is required" }),
         note: z.string().optional(),
+        packagePhotos: z.array(z.string()).optional(),
+        pdfDocument: z.string().optional(),
     }),
 });
 
 const updateParcelSchema = z.object({
     body: z.object({
-        name: z.string().optional(),
+        sameDayPickup: z.boolean().optional(),
         itemValue: z.number().optional(),
+        numberOfGoods: z.number().optional(),
+        goodType: z.string().optional(),
+        totalWeight: z.number().optional(),
+        dimension: z.object({
+            height: z.number().optional(),
+            width: z.number().optional(),
+            length: z.number().optional(),
+        }).optional(),
         pickupLocation: z.object({
             address: z.string(),
             coordinates: coordinateSchema,
@@ -44,10 +61,11 @@ const updateParcelSchema = z.object({
         }).optional(),
         vehicleType: z.nativeEnum(VEHICLE_TYPE).optional(),
         deliveryDate: z.string().optional(),
-        receiverName: z.string().optional(),
         receiverPhone: z.string().optional(),
         status: z.nativeEnum(PARCEL_STATUS).optional(),
         note: z.string().optional(),
+        packagePhotos: z.array(z.string()).optional(),
+        pdfDocument: z.string().optional(),
         pickupProof: z.array(z.string()).optional(),
         deliveryProof: z.array(z.string()).optional(),
         estimatedArrival: z.string().optional(),

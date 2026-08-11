@@ -2,38 +2,27 @@ import mongoose, { Schema } from "mongoose";
 import bcrypt from "bcrypt";
 import { IUser, USER_STATUS, UserModel } from "./user.interface";
 import { PROFILE_VERIFICATION_STATUS, USER_ROLES } from "../../../enum/user";
+import { VEHICLE_TYPE } from "../../../enum/parcel";
 import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../errors/ApiError";
 import config from "../../../config";
 
 const UserSchema = new Schema<IUser, UserModel>(
     {
-        email: {
+        fullName: {
             type: String,
             required: true,
-            unique: true,
         },
         phone: {
             type: String,
-            default: "",
+            required: true,
+            unique: true,
         },
         password: {
             type: String,
             required: true,
         },
         image: {
-            type: String,
-            default: "",
-        },
-        firstName: {
-            type: String,
-            default: "",
-        },
-        lastName: {
-            type: String,
-            default: "",
-        },
-        fullName: {
             type: String,
             default: "",
         },
@@ -51,10 +40,6 @@ const UserSchema = new Schema<IUser, UserModel>(
             default: USER_STATUS.ACTIVE,
         },
         verified: {
-            type: Boolean,
-            default: false,
-        },
-        isEmailVerified: {
             type: Boolean,
             default: false,
         },
@@ -103,19 +88,21 @@ const UserSchema = new Schema<IUser, UserModel>(
             type: [String],
             default: [],
         },
-        dateOfBirth: {
-            type: Date,
-        },
         driverInfo: {
-            nid: { type: [String], default: [] },
-            drivingLicense: { type: [String], default: [] },
+            vehicleType: {
+                type: String,
+                enum: Object.values(VEHICLE_TYPE),
+            },
+            nidFront: { type: String, default: "" },
+            nidBack: { type: String, default: "" },
+            drivingLicense: { type: String, default: "" },
+            criminalReport: { type: String, default: "" },
             profileVerification: {
                 type: String,
                 enum: Object.values(PROFILE_VERIFICATION_STATUS),
                 default: PROFILE_VERIFICATION_STATUS.PENDING,
             },
             rejectReason: { type: String, default: "" },
-            assignedVehicle: { type: Schema.Types.ObjectId, ref: "Vehicle" },
             totalRating: { type: Number, default: 0 },
             averageRating: { type: Number, default: 0 },
         },
@@ -136,9 +123,9 @@ UserSchema.statics.isPasswordMatched = async function (
 
 UserSchema.pre("save", async function (next) {
     try {
-        if (this.isModified("email")) {
+        if (this.isModified("phone")) {
             const isExist = await User.findOne({
-                email: this.email,
+                phone: this.phone,
                 status: { $in: [USER_STATUS.ACTIVE, USER_STATUS.RESTRICTED] },
                 _id: { $ne: this._id },
             });
@@ -147,7 +134,7 @@ UserSchema.pre("save", async function (next) {
                 return next(
                     new ApiError(
                         StatusCodes.BAD_REQUEST,
-                        "An account with this email already exists"
+                        "An account with this phone number already exists"
                     )
                 );
             }

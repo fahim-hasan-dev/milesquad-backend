@@ -22,9 +22,9 @@ const reviewReminderWorker = new Worker(
       await NotificationService.insertNotification({
         receiver: parcel.sender,
         title: "Review Reminder",
-        message: `Please rate your experience for parcel "${parcel.name}".`,
+        message: `Please rate your experience for parcel "${parcel.goodType || "Parcel"}".`,
         screen: "PARCEL_DETAILS",
-        type: USER_ROLES.SENDER
+        type: USER_ROLES.USER
       });
       logger.info(`Sent review reminder for parcel ${parcelId}`);
     }

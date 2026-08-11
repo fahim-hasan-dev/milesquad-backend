@@ -59,18 +59,27 @@ const calculateParcelDistanceAndPrice = async (query: Record<string, any>) => {
     const perKiloCost = settings.perKiloCost || 0;
     const distanceKm = distanceData.distanceKm;
 
+    const vehicleFares = settings.vehicleBaseFares || {};
     const vehicles = {
         motorcycle: {
-            baseFare: settings.vehicleBaseFares.motorcycle,
-            totalPrice: Math.ceil(settings.vehicleBaseFares.motorcycle + distanceKm * perKiloCost),
+            baseFare: vehicleFares.motorcycle || 0,
+            totalPrice: Math.ceil((vehicleFares.motorcycle || 0) + distanceKm * perKiloCost),
         },
         tricycle: {
-            baseFare: settings.vehicleBaseFares.tricycle,
-            totalPrice: Math.ceil(settings.vehicleBaseFares.tricycle + distanceKm * perKiloCost),
+            baseFare: vehicleFares.tricycle || 0,
+            totalPrice: Math.ceil((vehicleFares.tricycle || 0) + distanceKm * perKiloCost),
         },
         van: {
-            baseFare: settings.vehicleBaseFares.van,
-            totalPrice: Math.ceil(settings.vehicleBaseFares.van + distanceKm * perKiloCost),
+            baseFare: vehicleFares.van || 0,
+            totalPrice: Math.ceil((vehicleFares.van || 0) + distanceKm * perKiloCost),
+        },
+        car: {
+            baseFare: (vehicleFares as any).car || vehicleFares.van || 0,
+            totalPrice: Math.ceil(((vehicleFares as any).car || vehicleFares.van || 0) + distanceKm * perKiloCost),
+        },
+        truck: {
+            baseFare: (vehicleFares as any).truck || (vehicleFares.van ? vehicleFares.van * 1.5 : 0),
+            totalPrice: Math.ceil(((vehicleFares as any).truck || (vehicleFares.van ? vehicleFares.van * 1.5 : 0)) + distanceKm * perKiloCost),
         },
     };
 
@@ -129,17 +138,17 @@ const getAllParcels = async (query: Record<string, unknown>) => {
     const parcelQuery = new QueryBuilder(
         Parcel.find({ status: { $ne: PARCEL_STATUS.CREATED } }).populate({
             path: "sender driver",
-            select: "firstName lastName email phone image fullName"
+            select: "fullName phone image"
         }),
         query
     )
-        .search(["name", "receiverName", "receiverPhone"])
+        .search(["goodType", "receiverPhone"])
         .filter()
         .sort()
         .paginate()
         .fields();
 
-    parcelQuery.modelQuery.select("name itemValue status totalDeliveryFee vehicleType sender driver createdAt").lean();
+    parcelQuery.modelQuery.select("goodType itemValue status totalDeliveryFee vehicleType sameDayPickup numberOfGoods totalWeight dimension packagePhotos pdfDocument receiverPhone sender driver createdAt").lean();
 
     const parcels = await parcelQuery.modelQuery;
     const meta = await parcelQuery.getPaginationInfo();
@@ -159,17 +168,17 @@ const getMyParcels = async (
     const parcelQuery = new QueryBuilder(
         Parcel.find(filter).populate({
             path: "sender driver",
-            select: "firstName lastName email phone image fullName driverInfo.averageRating driverInfo.totalRating"
+            select: "fullName phone image driverInfo.averageRating driverInfo.totalRating"
         }),
         query
     )
         .filter()
-        .search(["name", "receiverName", "receiverPhone", "_id"])
+        .search(["goodType", "receiverPhone", "_id"])
         .sort()
         .paginate()
         .fields();
 
-    parcelQuery.modelQuery.select("name status totalDeliveryFee vehicleType pickupLocation.address dropLocation.address deliveryDate createdAt").lean();
+    parcelQuery.modelQuery.select("goodType status totalDeliveryFee vehicleType pickupLocation.address dropLocation.address deliveryDate sameDayPickup numberOfGoods totalWeight dimension packagePhotos pdfDocument receiverPhone createdAt").lean();
 
     const parcels = await parcelQuery.modelQuery;
     const meta = await parcelQuery.getPaginationInfo();
@@ -218,13 +227,17 @@ const getNearbyParcels = async (
                 localField: "sender",
                 foreignField: "_id",
                 as: "sender",
-                pipeline: [{ $project: { firstName: 1, lastName: 1, fullName: 1, image: 1, phone: 1 } }],
+                pipeline: [{ $project: { fullName: 1, image: 1, phone: 1 } }],
             },
         },
         { $unwind: { path: "$sender", preserveNullAndEmptyArrays: true } },
         {
             $project: {
-                name: 1,
+                goodType: 1,
+                numberOfGoods: 1,
+                totalWeight: 1,
+                dimension: 1,
+                sameDayPickup: 1,
                 vehicleType: 1,
                 pickupLocation: 1,
                 dropLocation: 1,
@@ -233,7 +246,10 @@ const getNearbyParcels = async (
                 deliveryDate: 1,
                 sender: 1,
                 status: 1,
-                driverShare: 1
+                driverShare: 1,
+                receiverPhone: 1,
+                packagePhotos: 1,
+                pdfDocument: 1
             }
         }
     ]);
@@ -312,7 +328,7 @@ const acceptParcel = async (parcelId: string, driverId: string) => {
         title: "Driver Assigned",
         message: "A driver has accepted your parcel!",
         screen: "PARCEL_TRACKING",
-        type: USER_ROLES.SENDER
+        type: USER_ROLES.USER
     });
 
     return updatedParcel;
@@ -412,9 +428,9 @@ const updateParcel = async (
         await NotificationService.insertNotification({
             receiver: parcel.sender,
             title: "Parcel Picked Up",
-            message: `Your parcel "${parcel.name}" is on the way!`,
+            message: `Your parcel "${parcel.goodType || "Parcel"}" is on the way!`,
             screen: "PARCEL_TRACKING",
-            type: USER_ROLES.SENDER
+            type: USER_ROLES.USER
         });
     } else if (payload.status === PARCEL_STATUS.DELIVERED) {
         payload.deliveredAt = new Date();
@@ -423,9 +439,9 @@ const updateParcel = async (
         await NotificationService.insertNotification({
             receiver: parcel.sender,
             title: "Parcel Delivered",
-            message: `Your parcel "${parcel.name}" was successfully delivered.`,
+            message: `Your parcel "${parcel.goodType || "Parcel"}" was successfully delivered.`,
             screen: "PARCEL_DETAILS",
-            type: USER_ROLES.SENDER
+            type: USER_ROLES.USER
         });
 
         await reviewReminderQueue.add(
@@ -435,7 +451,7 @@ const updateParcel = async (
         );
     } else if (payload.status === PARCEL_STATUS.CANCELLED) {
         const recipients = [
-            { id: parcel.sender, role: USER_ROLES.SENDER },
+            { id: parcel.sender, role: USER_ROLES.USER },
             ...(parcel.driver ? [{ id: parcel.driver, role: USER_ROLES.DRIVER }] : [])
         ];
 
@@ -443,7 +459,7 @@ const updateParcel = async (
             await NotificationService.insertNotification({
                 receiver: recipient.id,
                 title: "Parcel Cancelled",
-                message: `The parcel "${parcel.name}" was cancelled.`,
+                message: `The parcel "${parcel.goodType || "Parcel"}" was cancelled.`,
                 screen: "PARCEL_DETAILS",
                 type: recipient.role
             });
@@ -467,7 +483,7 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
 
     const currentUserId = user.authId || user.id;
 
-    if (user.role === USER_ROLES.SENDER) {
+    if (user.role === USER_ROLES.USER) {
         if (parcel.sender.toString() !== currentUserId) {
             throw new ApiError(StatusCodes.FORBIDDEN, "You do not own this parcel");
         }
@@ -478,7 +494,7 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
                 "Cannot cancel parcel once accepted or in progress."
             );
         }
-    } else if (user.role === USER_ROLES.ADMIN || user.role === USER_ROLES.SUPER_ADMIN) {
+    } else if (user.role === "super_admin" || user.role === "sub_admin" || user.role === "admin") {
         if (parcel.status === PARCEL_STATUS.DELIVERED) {
             throw new ApiError(StatusCodes.BAD_REQUEST, "Cannot cancel a delivered parcel.");
         }
@@ -525,7 +541,7 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
     }
 
     const recipients = [
-        { id: parcel.sender, role: USER_ROLES.SENDER },
+        { id: parcel.sender, role: USER_ROLES.USER },
         ...(parcel.driver ? [{ id: parcel.driver, role: USER_ROLES.DRIVER }] : [])
     ];
 
@@ -533,7 +549,7 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
         await NotificationService.insertNotification({
             receiver: recipient.id,
             title: "Parcel Cancelled",
-            message: `The parcel "${parcel.name}" was cancelled.`,
+            message: `The parcel "${parcel.goodType || "Parcel"}" was cancelled.`,
             screen: "PARCEL_DETAILS",
             type: recipient.role
         });

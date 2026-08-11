@@ -2,34 +2,35 @@ import express from "express";
 import { PlanController } from "./plan.controller";
 import { createPlanZodValidationSchema, updatePlanZodValidationSchema } from "./plan.validation";
 import auth from "../../middleware/auth";
-import { USER_ROLES } from "../../../enum/user";
+import { ADMIN_ROLES, USER_ROLES } from "../../../enum/user";
 import validateRequest from "../../middleware/validateRequest";
-const router = express.Router()
+
+const router = express.Router();
 
 router.route("/")
     .post(
-        auth(USER_ROLES.ADMIN),
+        auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
         validateRequest(createPlanZodValidationSchema),
         PlanController.createPlan
     )
     .get(
-        auth(USER_ROLES.ADMIN, USER_ROLES.USER),
+        auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN, USER_ROLES.USER, USER_ROLES.DRIVER),
         PlanController.getPlan
-    )
+    );
 
 router.post(
     "/create-checkout-session/:planId",
-    auth(USER_ROLES.USER),
+    auth(USER_ROLES.USER, USER_ROLES.DRIVER),
     PlanController.createCheckoutSession
-)
+);
 
 router
     .route("/:id")
     .patch(
-        auth(USER_ROLES.ADMIN),
+        auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
         validateRequest(updatePlanZodValidationSchema),
         PlanController.updatePlan
     )
-    .delete(auth(USER_ROLES.ADMIN), PlanController.deletePlan)
+    .delete(auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN), PlanController.deletePlan);
 
 export const PlanRoutes = router;

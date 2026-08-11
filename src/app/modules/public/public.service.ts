@@ -2,7 +2,7 @@ import { StatusCodes } from 'http-status-codes'
 import ApiError from '../../../errors/ApiError'
 import { IContact, IFaq, IPublic } from './public.interface'
 import { Contact, Faq, Public } from './public.model'
-import { User } from '../../../app/modules/user/user.model'
+import { Admin } from '../../../app/modules/admin/admin.model'
 import { emailHelper } from '../../../helpers/emailHelper'
 import QueryBuilder from '../../builder/QueryBuilder'
 import { emailTemplate } from '../../../shared/emailTemplate'
@@ -46,13 +46,12 @@ const deletePublic = async (id: string) => {
 
 const createContact = async (payload: IContact) => {
   try {
-    // Find admin user to send notification
-    const admin = await User.findOne({ role: 'admin' })
+    const admin = await Admin.findOne({ status: 'active' })
 
     if (!admin || !admin.email) {
       throw new ApiError(
         StatusCodes.INTERNAL_SERVER_ERROR,
-        'Admin user not found',
+        'Admin account not found',
       )
     }
 

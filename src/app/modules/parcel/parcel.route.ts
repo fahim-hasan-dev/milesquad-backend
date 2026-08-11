@@ -1,7 +1,7 @@
 import express from "express";
 import auth from "../../middleware/auth";
 import validateRequest from "../../middleware/validateRequest";
-import { USER_ROLES } from "../../../enum/user";
+import { ADMIN_ROLES, USER_ROLES } from "../../../enum/user";
 import { ParcelController } from "./parcel.controller";
 import { ParcelValidation } from "./parcel.validation";
 import { fileAndBodyProcessorUsingDiskStorage } from "../../middleware/processReqBody";
@@ -10,7 +10,8 @@ const router = express.Router();
 
 router.post(
     "/create-parcel",
-    auth(USER_ROLES.SENDER, USER_ROLES.USER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+    auth(USER_ROLES.USER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+    fileAndBodyProcessorUsingDiskStorage(),
     validateRequest(ParcelValidation.createParcelSchema),
     ParcelController.createParcel
 );
@@ -22,7 +23,7 @@ router.get(
 
 router.get(
     "/my-parcels",
-    auth(USER_ROLES.SENDER, USER_ROLES.DRIVER, USER_ROLES.USER),
+    auth(USER_ROLES.DRIVER, USER_ROLES.USER),
     ParcelController.getMyParcels
 );
 
@@ -41,19 +42,19 @@ router.patch(
 
 router.get(
     "/",
-    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+    auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     ParcelController.getAllParcels
 );
 
 router.get(
     "/:id",
-    auth(USER_ROLES.SENDER, USER_ROLES.DRIVER, USER_ROLES.USER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+    auth(USER_ROLES.DRIVER, USER_ROLES.USER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     ParcelController.getSingleParcel
 );
 
 router.patch(
     "/:id",
-    auth(USER_ROLES.SENDER, USER_ROLES.DRIVER, USER_ROLES.USER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+    auth(USER_ROLES.DRIVER, USER_ROLES.USER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     fileAndBodyProcessorUsingDiskStorage(),
     validateRequest(ParcelValidation.updateParcelSchema),
     ParcelController.updateParcel
@@ -61,13 +62,13 @@ router.patch(
 
 router.patch(
     "/:id/cancel",
-    auth(USER_ROLES.SENDER, USER_ROLES.USER, USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+    auth(USER_ROLES.USER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     ParcelController.cancelParcel
 );
 
 router.delete(
     "/:id",
-    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN),
+    auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     ParcelController.deleteParcel
 );
 

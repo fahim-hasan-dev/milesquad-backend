@@ -2,6 +2,7 @@ import express from 'express';
 import handleStripeWebhook from '../../stripe/handleStripeWebhook';
 import { UserRoutes } from '../modules/user/user.route';
 import { AuthRoutes } from '../modules/auth/auth.route';
+import { AdminRoutes } from '../modules/admin/admin.route';
 import { CategoryRoutes } from '../modules/category/category.route';
 import { ReviewRoutes } from '../modules/review/review.route';
 import { PaymentRoutes } from '../modules/payment/payment.route';
@@ -14,7 +15,6 @@ import { MessageRoutes } from '../modules/message/message.routes';
 import { NotificationRoutes } from '../modules/notification/notification.routes';
 import { ParcelRoutes } from '../modules/parcel/parcel.route';
 import { SettingRoutes } from '../modules/setting/setting.route';
-import { VehicleRoutes } from '../modules/vehicle/vehicle.route';
 import { AdminStatsRoutes } from '../modules/adminStats/adminStats.routes';
 import { DriverStatsRoutes } from '../modules/driverStats/driverStats.route';
 
@@ -23,6 +23,7 @@ const router = express.Router();
 const apiRoutes = [
     { path: "/user", route: UserRoutes },
     { path: "/auth", route: AuthRoutes },
+    { path: "/admin", route: AdminRoutes },
     { path: "/category", route: CategoryRoutes },
     { path: "/review", route: ReviewRoutes },
     { path: "/payment", route: PaymentRoutes },
@@ -35,7 +36,6 @@ const apiRoutes = [
     { path: "/notification", route: NotificationRoutes },
     { path: "/parcel", route: ParcelRoutes },
     { path: "/settings", route: SettingRoutes },
-    { path: "/vehicle", route: VehicleRoutes },
     { path: "/admin-stats", route: AdminStatsRoutes },
     { path: "/driver-stats", route: DriverStatsRoutes },
 ];

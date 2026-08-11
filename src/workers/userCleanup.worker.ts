@@ -13,7 +13,7 @@ const userCleanupWorker = new Worker(
 
     if (!user) return;
 
-    if (!user.isEmailVerified && !user.verified) {
+    if (!user.verified) {
       await User.findByIdAndDelete(userId);
       logger.info(`Deleted unverified user ${userId}`);
     }

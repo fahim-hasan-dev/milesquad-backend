@@ -1,6 +1,8 @@
 import { Model, Types } from "mongoose";
 import { PROFILE_VERIFICATION_STATUS, USER_ROLES, USER_STATUS } from "../../../enum/user";
-export { USER_ROLES, USER_STATUS, PROFILE_VERIFICATION_STATUS };
+import { VEHICLE_TYPE } from "../../../enum/parcel";
+
+export { USER_ROLES, USER_STATUS, PROFILE_VERIFICATION_STATUS, VEHICLE_TYPE };
 
 export type IAuthentication = {
     restrictionLeftAt: Date | null;
@@ -16,29 +18,26 @@ export type IAuthentication = {
 
 export type IUser = {
     _id: Types.ObjectId;
-    email: string;
-    phone?: string;
-    image?: string;
+    fullName: string;
+    phone: string;
     password: string;
-    firstName?: string;
-    lastName?: string;
-    fullName?: string;
+    image?: string;
     status: USER_STATUS;
-    verified?: boolean;
-    isEmailVerified?: boolean;
+    verified: boolean;
     role: USER_ROLES;
     address?: string;
     location?: [number, number];
     authentication: IAuthentication;
     deviceToken?: string;
     fcmToken?: string[];
-    dateOfBirth?: Date;
     driverInfo?: {
-        nid: string[];
-        drivingLicense: string[];
+        vehicleType?: VEHICLE_TYPE;
+        nidFront?: string;
+        nidBack?: string;
+        drivingLicense?: string;
+        criminalReport?: string;
         profileVerification: PROFILE_VERIFICATION_STATUS;
         rejectReason?: string;
-        assignedVehicle?: Types.ObjectId;
         totalRating: number;
         averageRating: number;
     };

@@ -94,7 +94,7 @@ const getDriverEarnings = async (driverId: string, range: string = 'all') => {
     }
 
     const parcels = await Parcel.find(matchQuery)
-        .select('_id name distance driverShare deliveredAt')
+        .select('_id goodType distance driverShare deliveredAt')
         .sort({ deliveredAt: -1 })
         .lean();
 
@@ -102,7 +102,7 @@ const getDriverEarnings = async (driverId: string, range: string = 'all') => {
     const earningsList = parcels.map(p => ({
         _id: p._id.toString(),
         trackingId: `#TR-${p._id.toString().slice(-4).toUpperCase()}`,
-        name: p.name,
+        goodType: p.goodType || 'Parcel',
         distance: p.distance,
         driverShare: p.driverShare,
         deliveredAt: p.deliveredAt

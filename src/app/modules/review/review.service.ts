@@ -55,7 +55,7 @@ const createReview = async (user: JwtPayload, payload: Partial<IReview> & { parc
 }
 
 const getAllReviews = async (query: Record<string, unknown>) => {
-  const reviewQueryBuilder = new QueryBuilder(Review.find().populate('sender', 'fullName image firstName lastName'), query)
+  const reviewQueryBuilder = new QueryBuilder(Review.find().populate('sender', 'fullName image'), query)
     .filter()
     .sort()
     .fields()
@@ -73,7 +73,7 @@ const getAllReviews = async (query: Record<string, unknown>) => {
 }
 
 const getReviewsByDriver = async (driverId: string, query: Record<string, unknown>) => {
-  const reviewQueryBuilder = new QueryBuilder(Review.find({ driver: driverId }).populate('sender', 'fullName image firstName lastName'), query)
+  const reviewQueryBuilder = new QueryBuilder(Review.find({ driver: driverId }).populate('sender', 'fullName image'), query)
     .filter()
     .sort()
     .fields()

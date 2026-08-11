@@ -15,7 +15,7 @@ const getAdminDashboardStats = async (year: number) => {
     ]);
     const totalRevenue = totalRevenueResult[0]?.total || 0;
 
-    const totalUsers = await User.countDocuments({ role: { $in: [USER_ROLES.SENDER, USER_ROLES.USER] } });
+    const totalUsers = await User.countDocuments({ role: USER_ROLES.USER });
     const totalDrivers = await User.countDocuments({ role: USER_ROLES.DRIVER });
     const totalDelivery = await Parcel.countDocuments({ status: PARCEL_STATUS.DELIVERED });
 

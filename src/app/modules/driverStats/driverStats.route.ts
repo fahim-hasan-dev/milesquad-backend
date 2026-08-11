@@ -1,6 +1,6 @@
 import express from "express";
 import auth from "../../middleware/auth";
-import { USER_ROLES } from "../../../enum/user";
+import { ADMIN_ROLES, USER_ROLES } from "../../../enum/user";
 import { DriverStatsController } from "./driverStats.controller";
 
 const router = express.Router();
@@ -13,7 +13,7 @@ router.get(
 
 router.get(
     "/:id",
-    auth(USER_ROLES.ADMIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.DRIVER),
+    auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN, USER_ROLES.DRIVER),
     DriverStatsController.getDriverStats
 );
 

@@ -1,36 +1,42 @@
-import express from 'express'
-import { UserController } from './user.controller'
-import auth from '../../middleware/auth'
-import { USER_ROLES } from '../../../enum/user'
-import fileUploadHandler from '../../middleware/fileUploadHandler'
+import express from 'express';
+import { UserController } from './user.controller';
+import auth from '../../middleware/auth';
+import { ADMIN_ROLES, USER_ROLES } from '../../../enum/user';
+import fileUploadHandler from '../../middleware/fileUploadHandler';
 
-const router = express.Router()
+const router = express.Router();
 
 router.get(
   '/me',
-  auth(USER_ROLES.USER, USER_ROLES.ADMIN),
+  auth(USER_ROLES.USER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
   UserController.getProfile,
-)
-router.get('/', auth(USER_ROLES.ADMIN), UserController.getAllUser);
+);
+
+router.get(
+  '/',
+  auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+  UserController.getAllUser
+);
+
 router.patch(
   '/profile',
-  auth(USER_ROLES.USER, USER_ROLES.ADMIN),
+  auth(USER_ROLES.USER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
   fileUploadHandler(),
   UserController.updateProfile,
-)
+);
 
-// delete my account
 router.delete(
   '/me',
-  auth(USER_ROLES.USER, USER_ROLES.ADMIN),
+  auth(USER_ROLES.USER, USER_ROLES.DRIVER),
   UserController.deleteMyAccount,
-)
+);
 
-// get single user
-router.get('/:id', UserController.getSingleUser)
+router.get('/:id', UserController.getSingleUser);
 
+router.delete(
+  '/:id',
+  auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+  UserController.deleteUser
+);
 
-// delete user
-router.delete('/:id', auth(USER_ROLES.ADMIN), UserController.deleteUser)
-
-export const UserRoutes = router
+export const UserRoutes = router;

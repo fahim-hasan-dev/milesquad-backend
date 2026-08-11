@@ -4,14 +4,31 @@ import { PARCEL_STATUS, VEHICLE_TYPE } from "../../../enum/parcel";
 
 const ParcelSchema = new Schema<IParcel>(
     {
-        name: {
-            type: String,
-            required: true,
-            trim: true,
+        sameDayPickup: {
+            type: Boolean,
+            default: false,
         },
         itemValue: {
             type: Number,
             required: true,
+        },
+        numberOfGoods: {
+            type: Number,
+            default: 1,
+        },
+        goodType: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+        totalWeight: {
+            type: Number,
+            default: 0,
+        },
+        dimension: {
+            height: { type: Number, default: 0 },
+            width: { type: Number, default: 0 },
+            length: { type: Number, default: 0 },
         },
         pickupLocation: {
             type: { type: String, enum: ['Point'], default: 'Point' },
@@ -27,6 +44,14 @@ const ParcelSchema = new Schema<IParcel>(
             type: String,
             enum: Object.values(VEHICLE_TYPE),
             required: true,
+        },
+        packagePhotos: {
+            type: [String],
+            default: [],
+        },
+        pdfDocument: {
+            type: String,
+            default: "",
         },
         distance: {
             type: Number,
@@ -63,11 +88,6 @@ const ParcelSchema = new Schema<IParcel>(
         deliveryDate: {
             type: Date,
             required: true,
-        },
-        receiverName: {
-            type: String,
-            required: true,
-            trim: true,
         },
         receiverPhone: {
             type: String,

@@ -1,16 +1,17 @@
 import express from "express";
 import { SubscriptionController } from "./subscription.controller";
 import auth from "../../middleware/auth";
-import { USER_ROLES } from "../../../enum/user";
+import { ADMIN_ROLES, USER_ROLES } from "../../../enum/user";
+
 const router = express.Router();
 
 router.get("/",
-    auth(USER_ROLES.ADMIN),
+    auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     SubscriptionController.subscriptions
 );
 
 router.get("/my-plan",
-    auth(USER_ROLES.USER),
+    auth(USER_ROLES.USER, USER_ROLES.DRIVER),
     SubscriptionController.subscriptionDetails
 );
 

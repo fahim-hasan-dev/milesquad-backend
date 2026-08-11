@@ -1,8 +1,5 @@
 export enum USER_ROLES {
-    ADMIN = "admin",
-    SUPER_ADMIN = "super_admin",
     USER = "user",
-    SENDER = "sender",
     DRIVER = "driver"
 }
 
@@ -14,8 +11,8 @@ export enum USER_STATUS {
 }
 
 export enum ADMIN_ROLES {
-    ADMIN = "admin",
-    SUPER_ADMIN = "super_admin"
+    SUPER_ADMIN = "super_admin",
+    SUB_ADMIN = "sub_admin"
 }
 
 export enum PROFILE_VERIFICATION_STATUS {

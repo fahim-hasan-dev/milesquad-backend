@@ -26,7 +26,6 @@ export const createCheckoutSession = async (userdata: JwtPayload, planId: string
                 quantity: 1,
             },
         ],
-        customer_email: user.email,
         success_url: `${config.stripe.frontendUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${config.stripe.frontendUrl}/payments/cancel`,
         metadata: {

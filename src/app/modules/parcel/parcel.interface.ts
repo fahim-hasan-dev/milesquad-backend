@@ -3,8 +3,16 @@ import { PARCEL_STATUS, VEHICLE_TYPE } from "../../../enum/parcel";
 
 export type IParcel = {
     _id: Types.ObjectId;
-    name: string;
     itemValue: number;
+    sameDayPickup?: boolean;
+    numberOfGoods?: number;
+    goodType?: string;
+    totalWeight?: number;
+    dimension?: {
+        height?: number;
+        width?: number;
+        length?: number;
+    };
     pickupLocation: {
         type: string;
         address: string;
@@ -16,6 +24,8 @@ export type IParcel = {
         coordinates: [number, number];
     };
     vehicleType: VEHICLE_TYPE;
+    packagePhotos?: string[];
+    pdfDocument?: string;
     distance: number;
     duration: string;
     baseFare: number;
@@ -25,7 +35,6 @@ export type IParcel = {
     paymentId?: string;
     sender: Types.ObjectId;
     deliveryDate: Date;
-    receiverName: string;
     receiverPhone: string;
     isDriverAssigned: boolean;
     driver?: Types.ObjectId;
