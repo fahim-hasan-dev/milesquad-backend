@@ -26,29 +26,77 @@ const setupTrackingNamespace = (io: Server) => {
 
     tracking.on('connection', (socket) => {
         const user = socket.data.user;
-        logger.info(`Tracking: ${user.role} ${user.authId || user.id} connected`);
+        const driverId = user.authId || user.id;
+        logger.info(`Tracking: ${user.role} ${driverId} connected`);
 
+        // Driver live location ping
         socket.on('driver:location-update', async (data: {
-            parcelId: string;
+            parcelId?: string;
             lat: number;
             lng: number;
+            status?: string;
         }) => {
-            const { parcelId, lat, lng } = data;
-            socket.join(`parcel:${parcelId}`);
+            const { parcelId, lat, lng, status } = data;
 
-            await trackingService.updateDriverLocation(
-                parcelId,
-                user.authId || user.id,
-                [lng, lat]
-            );
+            // Save global driver location in Redis
+            await trackingService.saveDriverCurrentLocation(driverId, [lng, lat], status || 'ONLINE');
 
-            tracking.to(`parcel:${parcelId}`).emit('location:updated', {
+            const payload = {
+                driverId,
                 lat,
                 lng,
-                timestamp: Date.now(),
-            });
+                status: status || 'ONLINE',
+                updatedAt: Date.now(),
+            };
+
+            // Notify single driver listeners
+            tracking.to(`driver:${driverId}`).emit('single-driver:location-updated', payload);
+
+            // Notify all drivers overview listeners
+            tracking.to('admin:all-drivers').emit('all-drivers:location-updated', payload);
+
+            // Notify parcel specific listeners if parcelId is provided
+            if (parcelId) {
+                socket.join(`parcel:${parcelId}`);
+                await trackingService.updateDriverLocation(parcelId, driverId, [lng, lat]);
+                tracking.to(`parcel:${parcelId}`).emit('location:updated', {
+                    lat,
+                    lng,
+                    timestamp: Date.now(),
+                });
+            }
         });
 
+        // Track single driver
+        socket.on('admin:track-single-driver', async (data: { driverId: string }) => {
+            const targetDriverId = data.driverId;
+            socket.join(`driver:${targetDriverId}`);
+
+            const location = await trackingService.getSingleDriverLocationById(targetDriverId);
+            if (location) {
+                socket.emit('single-driver:location-updated', location);
+            }
+        });
+
+        // Untrack single driver
+        socket.on('admin:untrack-single-driver', (data: { driverId: string }) => {
+            socket.leave(`driver:${data.driverId}`);
+        });
+
+        // Track all drivers
+        socket.on('admin:track-all-drivers', async () => {
+            socket.join('admin:all-drivers');
+
+            const allDrivers = await trackingService.getAllActiveDriversLocation();
+            socket.emit('all-drivers:initial-list', allDrivers);
+        });
+
+        // Untrack all drivers
+        socket.on('admin:untrack-all-drivers', () => {
+            socket.leave('admin:all-drivers');
+        });
+
+        // Track parcel by user
         socket.on('user:track-parcel', async (data: { parcelId: string }) => {
             const { parcelId } = data;
             socket.join(`parcel:${parcelId}`);
@@ -59,6 +107,7 @@ const setupTrackingNamespace = (io: Server) => {
             }
         });
 
+        // Untrack parcel by user
         socket.on('user:untrack-parcel', (data: { parcelId: string }) => {
             const { parcelId } = data;
             socket.leave(`parcel:${parcelId}`);

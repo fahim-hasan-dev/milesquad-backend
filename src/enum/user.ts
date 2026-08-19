@@ -21,3 +21,5 @@ export enum PROFILE_VERIFICATION_STATUS {
     REJECTED = 'rejected',
     RESUBMITTED = 'resubmitted',
 }
+
+

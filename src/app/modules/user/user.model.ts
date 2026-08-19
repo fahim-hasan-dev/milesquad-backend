@@ -18,6 +18,14 @@ const UserSchema = new Schema<IUser, UserModel>(
             required: true,
             unique: true,
         },
+        email: {
+            type: String,
+            default: "",
+        },
+        isEmailVerified: {
+            type: Boolean,
+            default: false,
+        },
         password: {
             type: String,
             required: true,
@@ -37,9 +45,9 @@ const UserSchema = new Schema<IUser, UserModel>(
         status: {
             type: String,
             enum: Object.values(USER_STATUS),
-            default: USER_STATUS.ACTIVE,
+            default: USER_STATUS.PENDING,
         },
-        verified: {
+        isPhoneVerified: {
             type: Boolean,
             default: false,
         },

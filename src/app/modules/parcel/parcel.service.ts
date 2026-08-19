@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../errors/ApiError";
-import { IParcel } from "./parcel.interface";
+import { IParcel, IStatusProgress } from "./parcel.interface";
 import { Parcel } from "./parcel.model";
 import { PARCEL_STATUS } from "../../../enum/parcel";
 import { parcelCleanupQueue, reviewReminderQueue } from "../../../queues";
@@ -19,6 +19,48 @@ import { USER_ROLES } from "../../../enum/user";
 import { Review } from "../review/review.model";
 import { calculateParcelPricing } from "../../../utils/pricingCalculator.util";
 import { User } from "../user/user.model";
+
+const updateStatusProgress = (
+    currentProgress: Partial<IStatusProgress> = {},
+    newStatus: PARCEL_STATUS
+): IStatusProgress => {
+    const stepsOrder = [
+        PARCEL_STATUS.CREATED,
+        PARCEL_STATUS.CONFIRMED,
+        PARCEL_STATUS.PENDING,
+        PARCEL_STATUS.RIDER_ASSIGNED,
+        PARCEL_STATUS.ON_THE_WAY_TO_PICKUP,
+        PARCEL_STATUS.PICKED_UP,
+        PARCEL_STATUS.ON_THE_WAY_TO_DELIVERY,
+        PARCEL_STATUS.DELIVERED,
+    ];
+
+    const progress: IStatusProgress = {
+        CREATED: currentProgress.CREATED ?? true,
+        CONFIRMED: currentProgress.CONFIRMED ?? false,
+        PENDING: currentProgress.PENDING ?? false,
+        RIDER_ASSIGNED: currentProgress.RIDER_ASSIGNED ?? false,
+        ON_THE_WAY_TO_PICKUP: currentProgress.ON_THE_WAY_TO_PICKUP ?? false,
+        PICKED_UP: currentProgress.PICKED_UP ?? false,
+        ON_THE_WAY_TO_DELIVERY: currentProgress.ON_THE_WAY_TO_DELIVERY ?? false,
+        DELIVERED: currentProgress.DELIVERED ?? false,
+        CANCELLED: currentProgress.CANCELLED ?? false,
+    };
+
+    if (newStatus === PARCEL_STATUS.CANCELLED) {
+        progress.CANCELLED = true;
+        return progress;
+    }
+
+    const targetIndex = stepsOrder.indexOf(newStatus);
+    if (targetIndex !== -1) {
+        for (let i = 0; i <= targetIndex; i++) {
+            progress[stepsOrder[i]] = true;
+        }
+    }
+
+    return progress;
+};
 
 const getOrCalculateParcelDistance = async (query: Record<string, any>) => {
     const { pickupLat, pickupLng, dropLat, dropLng } = query;
@@ -133,6 +175,8 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
     payload.platformFee = calculatedPricing.platformFee;
 
     payload.sender = new Types.ObjectId(user.authId || user.id);
+    payload.status = PARCEL_STATUS.CREATED;
+    payload.statusProgress = updateStatusProgress({}, PARCEL_STATUS.CREATED);
 
     const createdParcel = await Parcel.create(payload);
 
@@ -335,12 +379,15 @@ const acceptParcel = async (parcelId: string, driverId: string) => {
         );
     }
 
+    const updatedProgress = updateStatusProgress(parcel.statusProgress, PARCEL_STATUS.ON_THE_WAY_TO_PICKUP);
+
     const updatedParcel = await Parcel.findByIdAndUpdate(
         parcelId,
         {
             driver: driverId,
             isDriverAssigned: true,
-            status: PARCEL_STATUS.ACCEPTED,
+            status: PARCEL_STATUS.ON_THE_WAY_TO_PICKUP,
+            statusProgress: updatedProgress,
         },
         { new: true }
     ).populate("sender driver");
@@ -404,30 +451,26 @@ const updateParcel = async (
             throw new ApiError(StatusCodes.FORBIDDEN, "You are not assigned to this parcel");
         }
 
-        const allowedFields = ["status", "note", "pickupProof", "deliveryProof"];
+        const allowedFields = ["status", "note"];
         const keys = Object.keys(payload);
         const isAllowed = keys.every(key => allowedFields.includes(key));
         if (!isAllowed) {
-            throw new ApiError(StatusCodes.FORBIDDEN, "Drivers can only update status, note, and proof images.");
+            throw new ApiError(StatusCodes.FORBIDDEN, "Drivers can only update status and note.");
         }
 
-        if (payload.status === PARCEL_STATUS.PICKED_UP && !payload.pickupProof) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, "Pickup proof is required.");
-        }
-        if (payload.status === PARCEL_STATUS.DELIVERED && !payload.deliveryProof) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, "Delivery proof is required.");
-        }
-
-        if (payload.status === PARCEL_STATUS.PICKED_UP) {
-            if (parcel.status !== PARCEL_STATUS.ACCEPTED) {
+        if (payload.status === PARCEL_STATUS.ON_THE_WAY_TO_PICKUP) {
+            if (parcel.status !== PARCEL_STATUS.RIDER_ASSIGNED) {
                 throw new ApiError(StatusCodes.BAD_REQUEST, `Invalid status transition from ${parcel.status}`);
             }
-            payload.status = PARCEL_STATUS.IN_TRANSIT;
+        }
+
+        if (payload.status === PARCEL_STATUS.PICKED_UP || payload.status === PARCEL_STATUS.ON_THE_WAY_TO_DELIVERY) {
+            payload.status = PARCEL_STATUS.ON_THE_WAY_TO_DELIVERY;
         }
 
         if (payload.status === PARCEL_STATUS.DELIVERED) {
-            if (parcel.status !== PARCEL_STATUS.IN_TRANSIT) {
-                throw new ApiError(StatusCodes.BAD_REQUEST, "Parcel must be in transit before delivery.");
+            if (parcel.status !== PARCEL_STATUS.ON_THE_WAY_TO_DELIVERY && parcel.status !== PARCEL_STATUS.ON_THE_WAY_TO_PICKUP) {
+                throw new ApiError(StatusCodes.BAD_REQUEST, "Parcel must be picked up or on the way before delivery.");
             }
         }
     }
@@ -445,7 +488,11 @@ const updateParcel = async (
         }
     }
 
-    if (payload.status === PARCEL_STATUS.PICKED_UP || payload.status === PARCEL_STATUS.IN_TRANSIT) {
+    if (payload.status) {
+        payload.statusProgress = updateStatusProgress(parcel.statusProgress, payload.status);
+    }
+
+    if (payload.status === PARCEL_STATUS.PICKED_UP || payload.status === PARCEL_STATUS.ON_THE_WAY_TO_DELIVERY) {
         payload.pickedUpAt = new Date();
         await NotificationService.insertNotification({
             receiver: parcel.sender,
@@ -527,7 +574,13 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
         throw new ApiError(StatusCodes.FORBIDDEN, "Unauthorized");
     }
 
-    const paidStatuses = [PARCEL_STATUS.PENDING, PARCEL_STATUS.ACCEPTED, PARCEL_STATUS.PICKED_UP, PARCEL_STATUS.IN_TRANSIT];
+    const paidStatuses = [
+        PARCEL_STATUS.PENDING,
+        PARCEL_STATUS.RIDER_ASSIGNED,
+        PARCEL_STATUS.ON_THE_WAY_TO_PICKUP,
+        PARCEL_STATUS.PICKED_UP,
+        PARCEL_STATUS.ON_THE_WAY_TO_DELIVERY
+    ];
     if (paidStatuses.includes(parcel.status)) {
         const payment = await Payment.findOne({ referenceId: parcel._id });
         if (payment && payment.transactionId) {
@@ -549,11 +602,14 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
         }
     }
 
+    const updatedProgress = updateStatusProgress(parcel.statusProgress, PARCEL_STATUS.CANCELLED);
+
     const updatedParcel = await Parcel.findByIdAndUpdate(
         id,
         {
             status: PARCEL_STATUS.CANCELLED,
             isDriverAssigned: false,
+            statusProgress: updatedProgress,
         },
         { new: true }
     ).populate("sender driver");

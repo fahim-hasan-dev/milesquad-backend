@@ -4,11 +4,10 @@ import { StatusCodes } from 'http-status-codes'
 import config from '../config'
 import stripe from '../config/stripe'
 import ApiError from '../errors/ApiError'
-import { handleSubscriptionCreated } from './handleSubscriptionCreated'
 import { logger } from '../shared/logger'
-import { User } from '../app/modules/user/user.model'
-import { Subscription } from '../app/modules/subscription/subscription.model'
 import { Payment } from '../app/modules/payment/payment.model'
+import { Parcel } from '../app/modules/parcel/parcel.model'
+import { PARCEL_STATUS } from '../enum/parcel'
 
 const handleStripeWebhook = async (req: Request, res: Response) => {
     console.log('hit stripe webhook')
@@ -45,56 +44,24 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
                         customerName: session.customer_details?.name,
                         referenceId: session.metadata?.referenceId,
                     });
+
+                    if (session.metadata?.referenceId) {
+                        const parcelId = session.metadata.referenceId;
+                        const parcel = await Parcel.findById(parcelId);
+                        if (parcel) {
+                            await Parcel.findByIdAndUpdate(parcelId, {
+                                $set: {
+                                    status: PARCEL_STATUS.PENDING,
+                                    paymentId: session.payment_intent as string || session.id,
+                                    'statusProgress.CREATED': true,
+                                    'statusProgress.CONFIRMED': true,
+                                    'statusProgress.PENDING': true,
+                                }
+                            });
+                        }
+                    }
                 }
 
-                // ✅ AUTO-RENEW OFF for subscriptions
-                if (session.subscription) {
-                    await stripe.subscriptions.update(
-                        session.subscription as string,
-                        { cancel_at_period_end: true }
-                    )
-                }
-                break
-            }
-
-            case 'customer.subscription.created':
-                await handleSubscriptionCreated(data as Stripe.Subscription)
-                break
-
-            case 'customer.subscription.updated': {
-                const subscription = data as Stripe.Subscription
-
-                if (
-                    subscription.cancel_at_period_end &&
-                    subscription.status === 'active'
-                ) {
-                    logger.info(
-                        `Subscription for user ${subscription.metadata.userId} will expire`,
-                    )
-
-                    await User.findByIdAndUpdate(subscription.metadata.userId, {
-                        subscribe: false,
-                    })
-
-                    await Subscription.findOneAndUpdate(
-                        { user: subscription.metadata.userId },
-                        { status: 'expired' },
-                    )
-                }
-                break
-            }
-
-            case 'customer.subscription.deleted': {
-                const deletedSub = data as Stripe.Subscription
-
-                await User.findByIdAndUpdate(deletedSub.metadata.userId, {
-                    subscribe: false,
-                })
-
-                await Subscription.findOneAndUpdate(
-                    { user: deletedSub.metadata.userId },
-                    { status: 'expired' },
-                )
                 break
             }
 

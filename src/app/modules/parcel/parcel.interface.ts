@@ -1,6 +1,18 @@
 import { Types } from "mongoose";
 import { PARCEL_STATUS, VEHICLE_TYPE } from "../../../enum/parcel";
 
+export type IStatusProgress = {
+    CREATED: boolean;
+    CONFIRMED: boolean;
+    PENDING: boolean;
+    RIDER_ASSIGNED: boolean;
+    ON_THE_WAY_TO_PICKUP: boolean;
+    PICKED_UP: boolean;
+    ON_THE_WAY_TO_DELIVERY: boolean;
+    DELIVERED: boolean;
+    CANCELLED: boolean;
+};
+
 export type IParcel = {
     _id: Types.ObjectId;
     itemValue: number;
@@ -50,10 +62,8 @@ export type IParcel = {
     isDriverAssigned: boolean;
     driver?: Types.ObjectId;
     status: PARCEL_STATUS;
+    statusProgress?: IStatusProgress;
     note?: string;
-    pickupProof?: string[];
-    deliveryProof?: string[];
-    estimatedArrival?: Date;
     pickedUpAt?: Date;
     deliveredAt?: Date;
 };

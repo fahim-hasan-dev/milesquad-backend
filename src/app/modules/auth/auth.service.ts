@@ -6,7 +6,7 @@ import { USER_ROLES, USER_STATUS } from '../../../enum/user';
 import { AuthHelper } from './auth.helper';
 import { AuthCommonServices, authResponse } from './loginService';
 import { ILoginData } from '../../../interfaces/auth';
-import { JwtPayload } from 'jsonwebtoken';
+import { JwtPayload, Secret } from 'jsonwebtoken';
 import { jwtHelper } from '../../../helpers/jwtHelper';
 import config from '../../../config';
 import bcrypt from 'bcrypt';
@@ -53,6 +53,19 @@ export const createUser = async (payload: IUser) => {
     await sendSMS(payload.phone, `Your Milesquad verification code is: ${otp}`);
   } catch (error) {
     console.log('Failed to send SMS:', error);
+  }
+
+  // Send magic link if email is provided
+  if (payload.email?.trim()) {
+    try {
+      await AuthHelper.sendEmailVerificationMagicLink(
+        user._id,
+        payload.email,
+        payload.fullName
+      );
+    } catch (error) {
+      console.log('Failed to send email verification magic link:', error);
+    }
   }
 
   return user._id;
@@ -195,7 +208,8 @@ const verifyAccount = async (
     existingUser._id,
     {
       $set: {
-        verified: true,
+        isPhoneVerified: true,
+        status: USER_STATUS.ACTIVE,
         authentication: {
           oneTimeCode: '',
           expiresAt: null,
@@ -378,10 +392,47 @@ const deleteAccount = async (user: JwtPayload, password: string) => {
   };
 };
 
+const verifyEmail = async (token: string) => {
+  if (!token) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Verification token is required.');
+  }
+
+  let decodedToken: JwtPayload;
+  try {
+    decodedToken = jwtHelper.verifyToken(
+      token,
+      config.jwt.jwt_secret as Secret
+    );
+  } catch {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid or expired email verification link.');
+  }
+
+  const { authId, email } = decodedToken;
+  const existingUser = await User.findById(authId);
+
+  if (!existingUser) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found.');
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(
+    authId,
+    {
+      $set: {
+        email: email || existingUser.email,
+        isEmailVerified: true,
+      },
+    },
+    { new: true }
+  ).select('-password -authentication');
+
+  return updatedUser;
+};
+
 export const AuthServices = {
   createUser,
   login,
   verifyAccount,
+  verifyEmail,
   forgetPassword,
   resetPassword,
   resendOtp,

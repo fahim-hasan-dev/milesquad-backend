@@ -131,10 +131,22 @@ const logOut = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const verifyEmail = catchAsync(async (req: Request, res: Response) => {
+  const token = (req.query.token as string) || req.body.token;
+  const result = await AuthServices.verifyEmail(token);
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: 'Email verified successfully.',
+    data: result,
+  });
+});
+
 export const AuthController = {
   createUser,
   login: customLogin,
   verifyAccount,
+  verifyEmail,
   forgetPassword,
   resetPassword,
   resendOtp,

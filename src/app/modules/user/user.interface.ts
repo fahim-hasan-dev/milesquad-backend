@@ -20,10 +20,12 @@ export type IUser = {
     _id: Types.ObjectId;
     fullName: string;
     phone: string;
+    email?: string;
+    isEmailVerified?: boolean;
     password: string;
     image?: string;
     status: USER_STATUS;
-    verified: boolean;
+    isPhoneVerified: boolean;
     role: USER_ROLES;
     address?: string;
     location?: [number, number];

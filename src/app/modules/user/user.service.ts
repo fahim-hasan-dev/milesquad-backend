@@ -6,6 +6,8 @@ import { USER_STATUS } from '../../../enum/user';
 import { JwtPayload } from 'jsonwebtoken';
 import QueryBuilder from '../../builder/QueryBuilder';
 
+import { AuthHelper } from '../auth/auth.helper';
+
 const getAllUser = async (query: Record<string, unknown>) => {
     const userQueryBuilder = new QueryBuilder(User.find().select('-password -authentication'), query)
         .search(['fullName', 'phone'])
@@ -50,6 +52,20 @@ const updateProfile = async (
 
     if (!existingUser) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'User not found or deleted.');
+    }
+
+    const cleanEmail = payload.email?.trim();
+    if (cleanEmail && cleanEmail !== existingUser.email) {
+        payload.isEmailVerified = false;
+        try {
+            await AuthHelper.sendEmailVerificationMagicLink(
+                userId,
+                cleanEmail,
+                payload.fullName || existingUser.fullName
+            );
+        } catch (error) {
+            console.log('Failed to send verification email magic link:', error);
+        }
     }
 
     const updatedUser = await User.findOneAndUpdate(

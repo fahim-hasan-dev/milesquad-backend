@@ -395,8 +395,8 @@ const userContactConfirmationEmail = (payload: {
   </table>
 </body>
     `,
-  }
-}
+  };
+};
 
 const subscriptionActivatedEmail = (data: any) => {
   return {
@@ -426,8 +426,49 @@ const subscriptionActivatedEmail = (data: any) => {
   </table>
 </body>
 `,
-  }
-}
+  };
+};
+
+const sendMagicLink = (values: { email: string; name: string; url: string }) => {
+  return {
+    to: values.email,
+    subject: 'Verify Your Email Address - Milesquad',
+    html: `
+<body style="margin:0; padding:0; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0"
+         style="max-width:640px; margin:40px auto; background-color:#ffffff; border-radius:14px;
+                overflow:hidden; box-shadow:0 5px 25px rgba(0,0,0,0.08);">
+    <tr>
+      <td style="padding:45px;">
+        <h1 style="color:#0096FF; font-size:26px; font-weight:700; margin-bottom:15px; text-align:center;">
+          Verify Your Email Address ✨
+        </h1>
+        <p style="color:#003060; font-size:16px; line-height:1.6; margin-bottom:25px; text-align:center;">
+          Hi <strong>${values.name}</strong>, 👋<br>
+          Click the link below to verify your email address for your Milesquad account.
+        </p>
+        <div style="text-align:center; margin-top:35px; margin-bottom:35px;">
+          <a href="${values.url}" target="_blank"
+             style="background-color:#0096FF; color:#ffffff; padding:14px 32px; font-size:16px;
+                    font-weight:600; border-radius:10px; text-decoration:none; display:inline-block;
+                    box-shadow:0 4px 12px rgba(0,150,255,0.3);">
+            Verify Email Now 🚀
+          </a>
+        </div>
+        <p style="color:#777; font-size:13px; line-height:1.5; text-align:center; word-break:break-all;">
+          Or copy and paste this link into your browser:<br>
+          <a href="${values.url}" style="color:#0096FF;">${values.url}</a>
+        </p>
+        <p style="color:#003060; font-size:14px; margin-top:30px; text-align:center;">
+          This link will expire in 24 hours. If you didn’t request this, you can ignore this email.
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+    `,
+  };
+};
 
 export const emailTemplate = {
   createAccount,
@@ -436,4 +477,5 @@ export const emailTemplate = {
   userContactConfirmationEmail,
   adminContactNotificationEmail,
   subscriptionActivatedEmail,
-}
+  sendMagicLink,
+};

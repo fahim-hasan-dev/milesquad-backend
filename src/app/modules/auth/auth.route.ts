@@ -40,6 +40,9 @@ router.post(
   AuthController.verifyAccount,
 );
 
+router.get('/verify-email', AuthController.verifyEmail);
+router.post('/verify-email', AuthController.verifyEmail);
+
 router.post(
   '/forget-password',
   validateRequest(AuthValidations.forgetPasswordZodSchema),

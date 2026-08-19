@@ -11,7 +11,7 @@ export const scheduleUnverifiedAccountCleanup = () => {
 
             // Delete unverified accounts older than the grace period
             const result = await User.deleteMany({
-                verified: false,
+                isPhoneVerified: false,
                 createdAt: { $lt: cutoffDate }, // Only delete accounts created before the cutoff date    
             });
 

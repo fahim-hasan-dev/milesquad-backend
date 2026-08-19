@@ -10,10 +10,10 @@ import { IUser } from '../user/user.interface';
 import sendSMS from '../../../shared/sendSMS';
 
 const handleLoginLogic = async (payload: ILoginData, isUserExist: IUser): Promise<IAuthResponse> => {
-  const { authentication, verified, status, password } = isUserExist;
+  const { authentication, isPhoneVerified, status, password } = isUserExist;
   const { restrictionLeftAt } = authentication;
 
-  if (!verified) {
+  if (!isPhoneVerified) {
     const otp = generateOtp();
     const otpExpiresIn = new Date(Date.now() + 5 * 60 * 1000);
 

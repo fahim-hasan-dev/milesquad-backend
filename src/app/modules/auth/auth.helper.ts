@@ -2,7 +2,9 @@ import { Secret } from 'jsonwebtoken';
 import { jwtHelper } from '../../../helpers/jwtHelper';
 import config from '../../../config';
 import { Types } from 'mongoose';
-import bcrypt from "bcrypt";
+import bcrypt from 'bcrypt';
+import { emailHelper } from '../../../helpers/emailHelper';
+import { emailTemplate } from '../../../shared/emailTemplate';
 
 const createToken = (authId: Types.ObjectId, role: string, name?: string, phoneOrEmail?: string, deviceToken?: string) => {
   const accessToken = jwtHelper.createToken(
@@ -26,4 +28,30 @@ const isPasswordMatched = async (
   return await bcrypt.compare(plainTextPassword, hashedPassword);
 };
 
-export const AuthHelper = { createToken, isPasswordMatched };
+// Send magic link for email verification
+const sendEmailVerificationMagicLink = async (
+  userId: Types.ObjectId | string,
+  email: string,
+  name: string
+) => {
+  const cleanEmail = email?.trim();
+  if (!cleanEmail) return;
+
+  const token = jwtHelper.createToken(
+    { authId: userId, email: cleanEmail },
+    config.jwt.jwt_secret as Secret,
+    '24h'
+  );
+
+  const url = `${config.frontend_url || 'http://localhost:3000'}/verify-email?token=${token}`;
+
+  await emailHelper.sendEmail(
+    emailTemplate.sendMagicLink({
+      email: cleanEmail,
+      name: name || 'User',
+      url,
+    })
+  );
+};
+
+export const AuthHelper = { createToken, isPasswordMatched, sendEmailVerificationMagicLink };

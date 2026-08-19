@@ -5,6 +5,7 @@ export const userSignupSchema = z.object({
   body: z.object({
     fullName: z.string().min(1, "Full name is required"),
     phone: z.string().min(1, "Phone number is required"),
+    email: z.string().email("Invalid email address").optional().or(z.literal('')),
     password: z.string().min(6, "Password must be at least 6 characters"),
     role: z.nativeEnum(USER_ROLES, {
       errorMap: () => ({ message: "Role must be user or driver" }),
@@ -32,12 +33,13 @@ export const userUpdateSchema = z.object({
   body: z.object({
     fullName: z.string().min(1, "Full name is required").optional(),
     phone: z.string().optional(),
+    email: z.string().email("Invalid email address").optional().or(z.literal('')),
     address: z.string().optional(),
     location: z.array(z.number()).length(2).optional(),
     image: z.string().optional(),
     password: z.string().min(6, "Password must be at least 6 characters").optional(),
     status: z.nativeEnum(USER_STATUS).optional(),
-    verified: z.boolean().optional(),
+    isPhoneVerified: z.boolean().optional(),
     role: z.nativeEnum(USER_ROLES).optional(),
     driverInfo: z.object({
       vehicleType: z.nativeEnum(VEHICLE_TYPE).optional(),
