@@ -3,7 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../errors/ApiError";
 import { IParcel, IStatusProgress } from "./parcel.interface";
 import { Parcel } from "./parcel.model";
-import { PARCEL_STATUS } from "../../../enum/parcel";
+import { PARCEL_STATUS, PAYMENT_METHOD } from "../../../enum/parcel";
 import { parcelCleanupQueue, reviewReminderQueue } from "../../../queues";
 import stripe from "../../../config/stripe";
 import { Payment } from "../payment/payment.model";
@@ -175,18 +175,30 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
     payload.platformFee = calculatedPricing.platformFee;
 
     payload.sender = new Types.ObjectId(user.authId || user.id);
-    payload.status = PARCEL_STATUS.CREATED;
-    payload.statusProgress = updateStatusProgress({}, PARCEL_STATUS.CREATED);
+
+    const isHandCash = payload.paymentMethod === PAYMENT_METHOD.HAND_CASH;
+
+    if (isHandCash) {
+        payload.status = PARCEL_STATUS.PENDING;
+        payload.statusProgress = updateStatusProgress({}, PARCEL_STATUS.PENDING);
+    } else {
+        payload.status = PARCEL_STATUS.CREATED;
+        payload.statusProgress = updateStatusProgress({}, PARCEL_STATUS.CREATED);
+    }
 
     const createdParcel = await Parcel.create(payload);
 
-    await parcelCleanupQueue.add(
-        'cleanupUnpaidParcel',
-        { parcelId: createdParcel._id.toString() },
-        { delay: 60 * 60 * 1000 }
-    );
+    let paymentLink: string | null = null;
 
-    const paymentLink = await createPaymentSession(user, calculatedPricing.totalDeliveryFee, createdParcel._id.toString());
+    if (!isHandCash) {
+        await parcelCleanupQueue.add(
+            'cleanupUnpaidParcel',
+            { parcelId: createdParcel._id.toString() },
+            { delay: 60 * 60 * 1000 }
+        );
+
+        paymentLink = await createPaymentSession(user, calculatedPricing.totalDeliveryFee, createdParcel._id.toString());
+    }
 
     return { parcel: createdParcel, paymentLink };
 };
@@ -423,8 +435,6 @@ const getSingleParcel = async (id: string) => {
         };
     }
 
-    const settings = await SettingServices.getSettings();
-    parcelObj.perKiloCost = settings?.perKiloCost;
     parcelObj.review = review;
 
     return parcelObj;

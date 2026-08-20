@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PARCEL_STATUS, VEHICLE_TYPE } from "../../../enum/parcel";
+import { PARCEL_STATUS, VEHICLE_TYPE, PAYMENT_METHOD } from "../../../enum/parcel";
 
 const coordinateSchema = z.array(z.number())
     .length(2)
@@ -33,6 +33,7 @@ const createParcelSchema = z.object({
         vehicleType: z.nativeEnum(VEHICLE_TYPE),
         deliveryDate: z.string({ required_error: "Delivery date is required" }),
         receiverPhone: z.string({ required_error: "Receiver phone is required" }),
+        paymentMethod: z.nativeEnum(PAYMENT_METHOD).optional(),
         note: z.string().optional(),
         packagePhotos: z.array(z.string()).optional(),
         pdfDocument: z.string().optional(),

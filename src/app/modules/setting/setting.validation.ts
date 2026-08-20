@@ -5,18 +5,15 @@ const fareSettingValidation = z.object({
     freeTime: z.number().optional(),
     timeRate: z.number().optional(),
     fuelRate: z.number().optional(),
+    margin: z.number().optional(),
+    overhead: z.number().optional(),
+    riskIndex1: z.number().optional(),
+    riskIndex2: z.number().optional(),
+    riskIndex3: z.number().optional(),
+    loadFactor: z.number().optional(),
+    scheduledDelivery: z.number().optional(),
     maxWeight: z.number().optional(),
     maxVolume: z.number().optional(),
-    loadFactor: z.number().optional(),
-    commission: z.object({
-        platformMargin: z.number().optional(),
-        ridersMargin: z.number().optional(),
-    }).optional(),
-    riskIndex: z.object({
-        riskIndex1: z.number().optional(),
-        riskIndex2: z.number().optional(),
-        riskIndex3: z.number().optional(),
-    }).optional(),
 }).optional();
 
 const updateSettingZodSchema = z.object({
@@ -28,15 +25,6 @@ const updateSettingZodSchema = z.object({
             van: fareSettingValidation,
             truck: fareSettingValidation,
         }).optional(),
-        vehicleBaseFares: z.object({
-            motorcycle: z.number().optional(),
-            tricycle: z.number().optional(),
-            car: z.number().optional(),
-            van: z.number().optional(),
-            truck: z.number().optional(),
-        }).optional(),
-        perKiloCost: z.number().optional(),
-        platformCommissionPercentage: z.number().optional(),
     }),
 });
 

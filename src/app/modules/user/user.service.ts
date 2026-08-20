@@ -5,7 +5,6 @@ import { User } from './user.model';
 import { USER_STATUS } from '../../../enum/user';
 import { JwtPayload } from 'jsonwebtoken';
 import QueryBuilder from '../../builder/QueryBuilder';
-
 import { AuthHelper } from '../auth/auth.helper';
 
 const getAllUser = async (query: Record<string, unknown>) => {

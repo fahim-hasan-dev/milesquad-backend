@@ -3,18 +3,15 @@ export type IFareSetting = {
     freeTime: number;
     timeRate: number;
     fuelRate: number;
+    margin: number;
+    overhead: number;
+    riskIndex1: number;
+    riskIndex2: number;
+    riskIndex3: number;
+    loadFactor: number;
+    scheduledDelivery: number;
     maxWeight: number;
     maxVolume: number;
-    loadFactor: number;
-    commission: {
-        platformMargin: number;
-        ridersMargin: number;
-    };
-    riskIndex: {
-        riskIndex1: number;
-        riskIndex2: number;
-        riskIndex3: number;
-    };
 };
 
 export type ISetting = {
@@ -25,13 +22,4 @@ export type ISetting = {
         van: IFareSetting;
         truck: IFareSetting;
     };
-    vehicleBaseFares?: {
-        motorcycle?: number;
-        tricycle?: number;
-        car?: number;
-        van?: number;
-        truck?: number;
-    };
-    perKiloCost?: number;
-    platformCommissionPercentage?: number;
 };

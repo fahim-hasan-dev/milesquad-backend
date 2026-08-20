@@ -65,11 +65,18 @@ export const calculateParcelPricing = (input: IPricingInput): IPricingOutput => 
     const freeTime = fareSetting?.freeTime ?? 0;
     const timeRate = fareSetting?.timeRate ?? 0;
     const fuelRate = fareSetting?.fuelRate ?? 0;
+
+    const toFraction = (val?: number) => {
+        if (!val) return 0;
+        return val > 1 ? val / 100 : val;
+    };
+
+    const marginPercent = toFraction(fareSetting?.margin);
+    const overheadPercent = toFraction(fareSetting?.overhead);
+    const loadFactorIndex = toFraction(fareSetting?.loadFactor);
+    const scheduledDeliveryPercent = toFraction(fareSetting?.scheduledDelivery);
     const maxWeight = fareSetting?.maxWeight ?? 0;
     const maxVolume = fareSetting?.maxVolume ?? 0;
-    const loadFactorIndex = (fareSetting?.loadFactor ?? 0) / 100;
-    const platformMarginPercent = (fareSetting?.commission?.platformMargin ?? 0) / 100;
-    const ridersMarginPercent = (fareSetting?.commission?.ridersMargin ?? 0) / 100;
 
     // 1. Volume of goods (m^3) = L x W x H (in cm) * 1e-6
     const lengthCm = dimension.length ?? 0;
@@ -99,14 +106,12 @@ export const calculateParcelPricing = (input: IPricingInput): IPricingOutput => 
 
     // 8. Good risks = Risk index % x good value
     let riskIndexPercent = 0;
-    if (fareSetting?.riskIndex) {
-        if (itemValue < 50000) {
-            riskIndexPercent = fareSetting.riskIndex.riskIndex1 ?? 0;
-        } else if (itemValue < 150000) {
-            riskIndexPercent = fareSetting.riskIndex.riskIndex2 ?? 0;
-        } else {
-            riskIndexPercent = fareSetting.riskIndex.riskIndex3 ?? 0;
-        }
+    if (itemValue < 100000) {
+        riskIndexPercent = fareSetting?.riskIndex1 ?? 0;
+    } else if (itemValue <= 250000) {
+        riskIndexPercent = fareSetting?.riskIndex2 ?? 0;
+    } else {
+        riskIndexPercent = fareSetting?.riskIndex3 ?? 0;
     }
     const goodRisks = Number(((riskIndexPercent / 100) * itemValue).toFixed(2));
 
@@ -114,14 +119,15 @@ export const calculateParcelPricing = (input: IPricingInput): IPricingOutput => 
     const subtotalFee = Number((baseFee + timeCost + fuelCost + goodRisks).toFixed(2));
 
     // 10. Platform fee & Operation fee & Rider total cost
-    const platformFee = Number((subtotalFee * platformMarginPercent).toFixed(2));
-    const driverShare = Number((subtotalFee * ridersMarginPercent).toFixed(2));
-    const operationFee = Number((subtotalFee * (1 - ridersMarginPercent)).toFixed(2));
+    const platformFee = Number((subtotalFee * marginPercent).toFixed(2));
+    const driverShare = Number((subtotalFee * (1 - marginPercent)).toFixed(2));
+    const operationFee = Number((subtotalFee * overheadPercent).toFixed(2));
 
     // 11. Customer total cost
     let totalDeliveryFee = subtotalFee + platformFee;
     if (isScheduled) {
-        totalDeliveryFee = (subtotalFee + platformFee + operationFee) * (1 + scheduleIndex);
+        const scheduledBonus = scheduledDeliveryPercent > 0 ? scheduledDeliveryPercent : (scheduleIndex > 0 ? scheduleIndex : 0.1);
+        totalDeliveryFee = (subtotalFee + platformFee + operationFee) * (1 + scheduledBonus);
     }
     totalDeliveryFee = Math.ceil(totalDeliveryFee);
 

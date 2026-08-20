@@ -1,6 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 import { IParcel } from "./parcel.interface";
-import { PARCEL_STATUS, VEHICLE_TYPE } from "../../../enum/parcel";
+import { PARCEL_STATUS, VEHICLE_TYPE, PAYMENT_METHOD } from "../../../enum/parcel";
 
 const ParcelSchema = new Schema<IParcel>(
     {
@@ -90,6 +90,11 @@ const ParcelSchema = new Schema<IParcel>(
         platformFee: { type: Number, default: 0 },
         paymentId: {
             type: String,
+        },
+        paymentMethod: {
+            type: String,
+            enum: Object.values(PAYMENT_METHOD),
+            default: PAYMENT_METHOD.ONLINE,
         },
         sender: {
             type: Schema.Types.ObjectId,

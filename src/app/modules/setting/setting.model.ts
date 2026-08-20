@@ -6,18 +6,15 @@ const FareSettingSubSchema = new Schema({
     freeTime: { type: Number, default: 0 },
     timeRate: { type: Number, default: 0 },
     fuelRate: { type: Number, default: 0 },
+    margin: { type: Number, default: 0 },
+    overhead: { type: Number, default: 0 },
+    riskIndex1: { type: Number, default: 0 },
+    riskIndex2: { type: Number, default: 0 },
+    riskIndex3: { type: Number, default: 0 },
+    loadFactor: { type: Number, default: 0 },
+    scheduledDelivery: { type: Number, default: 0 },
     maxWeight: { type: Number, default: 0 },
     maxVolume: { type: Number, default: 0 },
-    loadFactor: { type: Number, default: 0 },
-    commission: {
-        platformMargin: { type: Number, default: 0 },
-        ridersMargin: { type: Number, default: 0 },
-    },
-    riskIndex: {
-        riskIndex1: { type: Number, default: 0 },
-        riskIndex2: { type: Number, default: 0 },
-        riskIndex3: { type: Number, default: 0 },
-    },
 }, { _id: false });
 
 const SettingSchema = new Schema<ISetting>({
@@ -28,15 +25,6 @@ const SettingSchema = new Schema<ISetting>({
         van: { type: FareSettingSubSchema, default: () => ({}) },
         truck: { type: FareSettingSubSchema, default: () => ({}) },
     },
-    vehicleBaseFares: {
-        motorcycle: { type: Number, default: 0 },
-        tricycle: { type: Number, default: 0 },
-        car: { type: Number, default: 0 },
-        van: { type: Number, default: 0 },
-        truck: { type: Number, default: 0 },
-    },
-    perKiloCost: { type: Number, default: 0 },
-    platformCommissionPercentage: { type: Number, default: 0 },
 }, {
     timestamps: true,
     toJSON: { virtuals: true },

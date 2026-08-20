@@ -17,3 +17,8 @@ export enum VEHICLE_TYPE {
     CAR = 'car',
     TRUCK = 'truck'
 }
+
+export enum PAYMENT_METHOD {
+    ONLINE = 'online',
+    HAND_CASH = 'hand_cash',
+}

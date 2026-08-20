@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import { PARCEL_STATUS, VEHICLE_TYPE } from "../../../enum/parcel";
+import { PARCEL_STATUS, VEHICLE_TYPE, PAYMENT_METHOD } from "../../../enum/parcel";
 
 export type IStatusProgress = {
     CREATED: boolean;
@@ -56,6 +56,7 @@ export type IParcel = {
     operationFee?: number;
     platformFee?: number;
     paymentId?: string;
+    paymentMethod?: PAYMENT_METHOD;
     sender: Types.ObjectId;
     deliveryDate: Date;
     receiverPhone: string;
