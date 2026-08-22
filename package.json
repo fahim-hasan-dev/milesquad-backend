@@ -1,5 +1,5 @@
 {
-  "name": "backend-template",
+  "name": "milesquad-backend",
   "version": "1.0.0",
   "main": "app.ts",
   "scripts": {

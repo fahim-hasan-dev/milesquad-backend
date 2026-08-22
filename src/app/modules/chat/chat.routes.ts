@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.post(
   "/",
-  auth(USER_ROLES.USER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+  auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
   async (req, res, next) => {
     try {
       const userId = req.user.authId || req.user.id;
@@ -25,13 +25,13 @@ router.post(
 
 router.get(
   "/",
-  auth(USER_ROLES.USER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+  auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
   ChatController.getChat
 );
 
 router.delete(
   "/:id",
-  auth(USER_ROLES.USER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+  auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
   ChatController.deleteChat
 );
 

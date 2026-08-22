@@ -43,7 +43,8 @@ const sendEmailVerificationMagicLink = async (
     '24h'
   );
 
-  const url = `${config.frontend_url || 'http://localhost:3000'}/verify-email?token=${token}`;
+  const baseUrl = config.backend_url || 'http://localhost:5006';
+  const url = `${baseUrl}/api/v1/auth/verify-email?token=${token}`;
 
   await emailHelper.sendEmail(
     emailTemplate.sendMagicLink({

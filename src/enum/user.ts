@@ -1,5 +1,5 @@
 export enum USER_ROLES {
-    USER = "user",
+    CUSTOMER = "customer",
     DRIVER = "driver"
 }
 

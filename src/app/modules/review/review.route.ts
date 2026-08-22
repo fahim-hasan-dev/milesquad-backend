@@ -10,7 +10,7 @@ const router = express.Router();
 router.post(
   '/',
   validateRequest(ReviewValidation.addReviewSchema),
-  auth(USER_ROLES.USER),
+  auth(USER_ROLES.CUSTOMER),
   ReviewController.createReview,
 );
 

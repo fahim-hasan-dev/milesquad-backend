@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.get(
   '/me',
-  auth(USER_ROLES.USER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+  auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
   UserController.getProfile,
 );
 
@@ -20,14 +20,14 @@ router.get(
 
 router.patch(
   '/profile',
-  auth(USER_ROLES.USER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+  auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
   fileUploadHandler(),
   UserController.updateProfile,
 );
 
 router.delete(
   '/me',
-  auth(USER_ROLES.USER, USER_ROLES.DRIVER),
+  auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER),
   UserController.deleteMyAccount,
 );
 

@@ -54,7 +54,7 @@ const UserSchema = new Schema<IUser, UserModel>(
         role: {
             type: String,
             enum: Object.values(USER_ROLES),
-            default: USER_ROLES.USER,
+            default: USER_ROLES.CUSTOMER,
         },
         authentication: {
             restrictionLeftAt: {
@@ -97,22 +97,25 @@ const UserSchema = new Schema<IUser, UserModel>(
             default: [],
         },
         driverInfo: {
-            vehicleType: {
-                type: String,
-                enum: Object.values(VEHICLE_TYPE),
+            type: {
+                vehicleType: {
+                    type: String,
+                    enum: Object.values(VEHICLE_TYPE),
+                },
+                nidFront: { type: String, default: "" },
+                nidBack: { type: String, default: "" },
+                drivingLicense: { type: String, default: "" },
+                criminalReport: { type: String, default: "" },
+                profileVerification: {
+                    type: String,
+                    enum: Object.values(PROFILE_VERIFICATION_STATUS),
+                    default: PROFILE_VERIFICATION_STATUS.PENDING,
+                },
+                rejectReason: { type: String, default: "" },
+                totalRating: { type: Number, default: 0 },
+                averageRating: { type: Number, default: 0 },
             },
-            nidFront: { type: String, default: "" },
-            nidBack: { type: String, default: "" },
-            drivingLicense: { type: String, default: "" },
-            criminalReport: { type: String, default: "" },
-            profileVerification: {
-                type: String,
-                enum: Object.values(PROFILE_VERIFICATION_STATUS),
-                default: PROFILE_VERIFICATION_STATUS.PENDING,
-            },
-            rejectReason: { type: String, default: "" },
-            totalRating: { type: Number, default: 0 },
-            averageRating: { type: Number, default: 0 },
+            default: undefined,
         },
     },
     {

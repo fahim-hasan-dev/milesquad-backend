@@ -168,7 +168,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"phone\": \"+221770000001\",\n  \"otp\": \"123456\",\n  \"newPassword\": \"NewPassword123!\"\n}",
+              "raw": "{\n  \"newPassword\": \"NewPassword123!\",\n  \"confirmPassword\": \"NewPassword123!\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -176,13 +176,19 @@
               }
             },
             "url": {
-              "raw": "{{baseUrl}}/auth/reset-password",
+              "raw": "{{baseUrl}}/auth/reset-password?token=YOUR_RESET_AUTH_TOKEN",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "auth",
                 "reset-password"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "YOUR_RESET_AUTH_TOKEN"
+                }
               ]
             }
           }
@@ -226,7 +232,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"oldPassword\": \"Password123!\",\n  \"newPassword\": \"NewPassword123!\"\n}",
+              "raw": "{\n  \"currentPassword\": \"Password123!\",\n  \"newPassword\": \"NewPassword123!\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

@@ -10,7 +10,7 @@ const router = express.Router();
 
 router.post(
     "/create-parcel",
-    auth(USER_ROLES.USER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+    auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     fileAndBodyProcessorUsingDiskStorage(),
     validateRequest(ParcelValidation.createParcelSchema),
     ParcelController.createParcel
@@ -23,7 +23,7 @@ router.get(
 
 router.get(
     "/my-parcels",
-    auth(USER_ROLES.DRIVER, USER_ROLES.USER),
+    auth(USER_ROLES.DRIVER, USER_ROLES.CUSTOMER),
     ParcelController.getMyParcels
 );
 
@@ -48,13 +48,13 @@ router.get(
 
 router.get(
     "/:id",
-    auth(USER_ROLES.DRIVER, USER_ROLES.USER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+    auth(USER_ROLES.DRIVER, USER_ROLES.CUSTOMER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     ParcelController.getSingleParcel
 );
 
 router.patch(
     "/:id",
-    auth(USER_ROLES.DRIVER, USER_ROLES.USER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+    auth(USER_ROLES.DRIVER, USER_ROLES.CUSTOMER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     fileAndBodyProcessorUsingDiskStorage(),
     validateRequest(ParcelValidation.updateParcelSchema),
     ParcelController.updateParcel
@@ -62,7 +62,7 @@ router.patch(
 
 router.patch(
     "/:id/cancel",
-    auth(USER_ROLES.USER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+    auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     ParcelController.cancelParcel
 );
 

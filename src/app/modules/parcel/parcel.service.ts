@@ -15,7 +15,7 @@ import { redisClient } from "../../../helpers/redis";
 import { createPaymentSession } from "../../../stripe/createPaymentSession";
 import { JwtPayload } from "jsonwebtoken";
 import { NotificationService } from "../notification/notification.service";
-import { USER_ROLES } from "../../../enum/user";
+import { ADMIN_ROLES, USER_ROLES } from "../../../enum/user";
 import { Review } from "../review/review.model";
 import { calculateParcelPricing } from "../../../utils/pricingCalculator.util";
 import { User } from "../user/user.model";
@@ -232,7 +232,7 @@ const getMyParcels = async (
     role: string,
     query: Record<string, unknown>
 ) => {
-    const filter = role === "driver"
+    const filter = role === USER_ROLES.DRIVER
         ? { driver: userId, status: { $ne: PARCEL_STATUS.CREATED } }
         : { sender: userId, status: { $ne: PARCEL_STATUS.CREATED } };
 
@@ -413,7 +413,7 @@ const acceptParcel = async (parcelId: string, driverId: string) => {
         title: "Driver Assigned",
         message: "A driver has accepted your parcel!",
         screen: "PARCEL_TRACKING",
-        type: USER_ROLES.USER
+        type: USER_ROLES.CUSTOMER
     });
 
     return updatedParcel;
@@ -492,9 +492,9 @@ const getSingleParcel = async (id: string, user?: JwtPayload) => {
 
     if (userRole === USER_ROLES.DRIVER) {
         parcelObj.pricingDetails = driverPricing;
-    } else if (userRole === USER_ROLES.USER || userRole === "sender") {
+    } else if (userRole === USER_ROLES.CUSTOMER) {
         parcelObj.pricingDetails = customerPricing;
-    } else if (userRole === "admin" || userRole === "super_admin" || userRole === "sub_admin") {
+    } else if (userRole === ADMIN_ROLES.SUPER_ADMIN || userRole === ADMIN_ROLES.SUB_ADMIN) {
         parcelObj.pricingDetails = {
             driver: driverPricing,
             customer: customerPricing,
@@ -523,7 +523,7 @@ const updateParcel = async (
 
     const currentUserId = user.authId || user.id;
 
-    if (user.role === "driver") {
+    if (user.role === USER_ROLES.DRIVER) {
         if (parcel.driver?.toString() !== currentUserId) {
             throw new ApiError(StatusCodes.FORBIDDEN, "You are not assigned to this parcel");
         }
@@ -552,7 +552,7 @@ const updateParcel = async (
         }
     }
 
-    if (user.role === "sender") {
+    if (user.role === USER_ROLES.CUSTOMER) {
         if (parcel.sender.toString() !== currentUserId) {
             throw new ApiError(StatusCodes.FORBIDDEN, "You do not own this parcel");
         }
@@ -576,7 +576,7 @@ const updateParcel = async (
             title: "Parcel Picked Up",
             message: `Your parcel "${parcel.goodType || "Parcel"}" is on the way!`,
             screen: "PARCEL_TRACKING",
-            type: USER_ROLES.USER
+            type: USER_ROLES.CUSTOMER
         });
     } else if (payload.status === PARCEL_STATUS.DELIVERED) {
         payload.deliveredAt = new Date();
@@ -587,7 +587,7 @@ const updateParcel = async (
             title: "Parcel Delivered",
             message: `Your parcel "${parcel.goodType || "Parcel"}" was successfully delivered.`,
             screen: "PARCEL_DETAILS",
-            type: USER_ROLES.USER
+            type: USER_ROLES.CUSTOMER
         });
 
         await reviewReminderQueue.add(
@@ -597,7 +597,7 @@ const updateParcel = async (
         );
     } else if (payload.status === PARCEL_STATUS.CANCELLED) {
         const recipients = [
-            { id: parcel.sender, role: USER_ROLES.USER },
+            { id: parcel.sender, role: USER_ROLES.CUSTOMER },
             ...(parcel.driver ? [{ id: parcel.driver, role: USER_ROLES.DRIVER }] : [])
         ];
 
@@ -629,7 +629,7 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
 
     const currentUserId = user.authId || user.id;
 
-    if (user.role === USER_ROLES.USER) {
+    if (user.role === USER_ROLES.CUSTOMER) {
         if (parcel.sender.toString() !== currentUserId) {
             throw new ApiError(StatusCodes.FORBIDDEN, "You do not own this parcel");
         }
@@ -640,7 +640,7 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
                 "Cannot cancel parcel once accepted or in progress."
             );
         }
-    } else if (user.role === "super_admin" || user.role === "sub_admin" || user.role === "admin") {
+    } else if (user.role === ADMIN_ROLES.SUPER_ADMIN || user.role === ADMIN_ROLES.SUB_ADMIN) {
         if (parcel.status === PARCEL_STATUS.DELIVERED) {
             throw new ApiError(StatusCodes.BAD_REQUEST, "Cannot cancel a delivered parcel.");
         }
@@ -696,7 +696,7 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
     }
 
     const recipients = [
-        { id: parcel.sender, role: USER_ROLES.USER },
+        { id: parcel.sender, role: USER_ROLES.CUSTOMER },
         ...(parcel.driver ? [{ id: parcel.driver, role: USER_ROLES.DRIVER }] : [])
     ];
 

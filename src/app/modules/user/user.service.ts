@@ -2,7 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiError';
 import { IUser } from './user.interface';
 import { User } from './user.model';
-import { USER_STATUS } from '../../../enum/user';
+import { USER_ROLES, USER_STATUS } from '../../../enum/user';
 import { JwtPayload } from 'jsonwebtoken';
 import QueryBuilder from '../../builder/QueryBuilder';
 import { AuthHelper } from '../auth/auth.helper';
@@ -15,7 +15,14 @@ const getAllUser = async (query: Record<string, unknown>) => {
         .fields()
         .paginate();
 
-    const users = await userQueryBuilder.modelQuery.lean();
+    const rawUsers = await userQueryBuilder.modelQuery.lean();
+    const users = rawUsers.map((u: any) => {
+        if (u.role !== USER_ROLES.DRIVER) {
+            delete u.driverInfo;
+        }
+        return u;
+    });
+
     const paginationInfo = await userQueryBuilder.getPaginationInfo();
     const totalUsers = await User.countDocuments({ status: { $ne: USER_STATUS.DELETED } });
 
@@ -27,9 +34,12 @@ const getAllUser = async (query: Record<string, unknown>) => {
 };
 
 const getSingleUser = async (id: string) => {
-    const user = await User.findById(id).select('-password -authentication');
+    const user: any = await User.findById(id).select('-password -authentication').lean();
     if (!user) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+    }
+    if (user.role !== USER_ROLES.DRIVER) {
+        delete user.driverInfo;
     }
     return user;
 };
@@ -67,14 +77,18 @@ const updateProfile = async (
         }
     }
 
-    const updatedUser = await User.findOneAndUpdate(
+    const updatedUser: any = await User.findOneAndUpdate(
         { _id: userId, status: { $ne: USER_STATUS.DELETED } },
         payload,
         { new: true },
-    ).select('-password -authentication');
+    ).select('-password -authentication').lean();
 
     if (!updatedUser) {
         throw new ApiError(StatusCodes.BAD_REQUEST, 'Failed to update profile');
+    }
+
+    if (updatedUser.role !== USER_ROLES.DRIVER) {
+        delete updatedUser.driverInfo;
     }
 
     return updatedUser;
@@ -82,9 +96,12 @@ const updateProfile = async (
 
 const getProfile = async (user: JwtPayload) => {
     const userId = user.authId || user.id;
-    const existingUser = await User.findById(userId).select('-password -authentication').lean();
+    const existingUser: any = await User.findById(userId).select('-password -authentication').lean();
     if (!existingUser) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'Profile not found or deleted.');
+    }
+    if (existingUser.role !== USER_ROLES.DRIVER) {
+        delete existingUser.driverInfo;
     }
     return existingUser;
 };

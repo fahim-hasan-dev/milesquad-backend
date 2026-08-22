@@ -43,10 +43,14 @@ export const createUser = async (payload: IUser) => {
     wrongLoginAttempts: 0,
   };
 
+  if (payload.role !== USER_ROLES.DRIVER) {
+    delete payload.driverInfo;
+  }
+
   const user = await User.create({
     ...payload,
     authentication,
-    role: payload.role || USER_ROLES.USER,
+    role: payload.role || USER_ROLES.CUSTOMER,
   });
 
   try {
@@ -68,7 +72,7 @@ export const createUser = async (payload: IUser) => {
     }
   }
 
-  return user._id;
+  return { userId: user._id, otp };
 };
 
 const login = async (payload: ILoginData): Promise<IAuthResponse> => {
@@ -132,24 +136,36 @@ const forgetPassword = async (phone: string) => {
     console.log('Failed to send reset SMS:', error);
   }
 
-  return 'OTP sent to your phone successfully.';
+  return { message: 'OTP sent to your phone successfully.', otp };
 };
 
-const resetPassword = async (payload: { phone: string; otp: string; newPassword: string }) => {
-  const { phone, otp, newPassword } = payload;
-  const existingUser = await User.findOne({ phone: phone.trim() })
-    .select('+authentication');
+const resetPassword = async (payload: { token?: string; newPassword: string; confirmPassword: string }) => {
+  const { token, newPassword, confirmPassword } = payload;
+
+  if (!token) {
+    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Reset auth token is required');
+  }
+
+  if (!newPassword || !confirmPassword) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'New password and confirm password are required');
+  }
+
+  if (newPassword !== confirmPassword) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'New password and confirm password do not match');
+  }
+
+  let verifiedToken: any;
+  try {
+    verifiedToken = jwtHelper.verifyToken(token, config.jwt.jwt_secret as Secret);
+  } catch (error) {
+    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid or expired reset token');
+  }
+
+  const userId = verifiedToken.authId || verifiedToken.id;
+  const existingUser = await User.findById(userId).select('+password +authentication');
 
   if (!existingUser) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'User not found');
-  }
-
-  if (existingUser.authentication?.oneTimeCode !== otp) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid OTP');
-  }
-
-  if (existingUser.authentication?.expiresAt && new Date() > existingUser.authentication.expiresAt) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'OTP has expired');
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
   }
 
   const hashedPassword = await bcrypt.hash(newPassword, Number(config.bcrypt_salt_rounds));
@@ -161,10 +177,11 @@ const resetPassword = async (payload: { phone: string; otp: string; newPassword:
         resetPassword: false,
         oneTimeCode: '',
         expiresAt: null,
-        latestRequestAt: new Date(),
+        latestRequestAt: null,
         requestCount: 0,
         restrictionLeftAt: null,
         wrongLoginAttempts: 0,
+        authType: '',
       },
     },
   });
@@ -175,13 +192,14 @@ const resetPassword = async (payload: { phone: string; otp: string; newPassword:
 const verifyAccount = async (
   phone: string,
   onetimeCode: string,
-): Promise<IAuthResponse> => {
+): Promise<any> => {
   if (!onetimeCode) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'OTP is required.');
   }
 
+  const cleanPhone = phone?.trim();
   const existingUser = await User.findOne({
-    phone: phone.trim(),
+    phone: cleanPhone,
     status: { $nin: [USER_STATUS.DELETED] },
   })
     .select('+password +authentication')
@@ -200,8 +218,24 @@ const verifyAccount = async (
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid OTP, please try again.');
   }
 
-  if (authentication?.expiresAt && authentication.expiresAt < new Date()) {
+  if (authentication?.expiresAt && new Date(authentication.expiresAt) < new Date()) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'OTP has expired, please try again.');
+  }
+
+  // Check if this OTP verification is for Reset Password flow
+  if (authentication?.authType === 'resetPassword' || authentication?.resetPassword) {
+    const token = jwtHelper.createToken(
+      { authId: existingUser._id, role: existingUser.role, isResetToken: true },
+      config.jwt.jwt_secret as Secret,
+      '15m'
+    );
+
+    return {
+      status: StatusCodes.OK,
+      message: 'OTP verified successfully.',
+      isResetPasswordFlow: true,
+      token,
+    };
   }
 
   await User.findByIdAndUpdate(
@@ -322,7 +356,7 @@ const resendOtp = async (phone: string) => {
     console.log('Failed to resend SMS:', error);
   }
 
-  return 'OTP sent to your phone successfully.';
+  return { message: 'OTP sent to your phone successfully.', otp };
 };
 
 const changePassword = async (
@@ -330,14 +364,14 @@ const changePassword = async (
   currentPassword: string,
   newPassword: string
 ) => {
-  const userId = user.authId || user.id;
-  const existingUser = await User.findById(userId).select('+password').lean();
+  const userId = user.authId;
+  const existingUser = await User.findById(userId).select('+password');
 
   if (!existingUser) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
   }
 
-  const isPasswordMatch = await AuthHelper.isPasswordMatched(
+  const isPasswordMatch = await User.isPasswordMatched(
     currentPassword,
     existingUser.password
   );

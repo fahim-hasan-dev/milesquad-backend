@@ -455,10 +455,6 @@ const sendMagicLink = (values: { email: string; name: string; url: string }) => 
             Verify Email Now 🚀
           </a>
         </div>
-        <p style="color:#777; font-size:13px; line-height:1.5; text-align:center; word-break:break-all;">
-          Or copy and paste this link into your browser:<br>
-          <a href="${values.url}" style="color:#0096FF;">${values.url}</a>
-        </p>
         <p style="color:#003060; font-size:14px; margin-top:30px; text-align:center;">
           This link will expire in 24 hours. If you didn’t request this, you can ignore this email.
         </p>

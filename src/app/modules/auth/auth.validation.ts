@@ -41,10 +41,16 @@ const forgetPasswordZodSchema = z.object({
 });
 
 const resetPasswordZodSchema = z.object({
+  query: z.object({
+    token: z.string().optional(),
+  }).optional(),
   body: z.object({
-    phone: z.string().min(1, 'Phone number is required'),
-    otp: z.string().min(1, 'OTP is required'),
+    token: z.string().optional(),
     newPassword: z.string().min(6, 'Password must be at least 6 characters'),
+    confirmPassword: z.string().min(6, 'Confirm password must be at least 6 characters'),
+  }).refine((data) => data.newPassword === data.confirmPassword, {
+    message: "New password and confirm password do not match",
+    path: ["confirmPassword"],
   }),
 });
 
@@ -56,7 +62,7 @@ const resendOtpZodSchema = z.object({
 
 const changePasswordZodSchema = z.object({
   body: z.object({
-    currentPassword: z.string().min(1, 'Current password is required'),
+    currentPassword: z.string().optional(),
     newPassword: z.string().min(6, 'New password must be at least 6 characters'),
   }),
 });

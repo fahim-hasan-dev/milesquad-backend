@@ -24,7 +24,7 @@ const reviewReminderWorker = new Worker(
         title: "Review Reminder",
         message: `Please rate your experience for parcel "${parcel.goodType || "Parcel"}".`,
         screen: "PARCEL_DETAILS",
-        type: USER_ROLES.USER
+        type: USER_ROLES.CUSTOMER
       });
       logger.info(`Sent review reminder for parcel ${parcelId}`);
     }
