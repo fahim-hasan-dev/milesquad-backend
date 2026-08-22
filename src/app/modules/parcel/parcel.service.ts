@@ -204,6 +204,9 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
 };
 
 const getAllParcels = async (query: Record<string, unknown>) => {
+    const defaultFields = "goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver createdAt";
+    const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
+
     const parcelQuery = new QueryBuilder(
         Parcel.find({ status: { $ne: PARCEL_STATUS.CREATED } }).populate({
             path: "sender driver",
@@ -214,10 +217,9 @@ const getAllParcels = async (query: Record<string, unknown>) => {
         .search(["goodType", "receiverPhone"])
         .filter()
         .sort()
-        .paginate()
-        .fields();
+        .paginate();
 
-    parcelQuery.modelQuery.select("goodType itemValue status totalDeliveryFee vehicleType sameDayPickup numberOfGoods totalWeight dimension packagePhotos pdfDocument receiverPhone sender driver createdAt").lean();
+    parcelQuery.modelQuery.select(selectedFields).lean();
 
     const parcels = await parcelQuery.modelQuery;
     const meta = await parcelQuery.getPaginationInfo();
@@ -234,6 +236,9 @@ const getMyParcels = async (
         ? { driver: userId, status: { $ne: PARCEL_STATUS.CREATED } }
         : { sender: userId, status: { $ne: PARCEL_STATUS.CREATED } };
 
+    const defaultFields = "goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver createdAt";
+    const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
+
     const parcelQuery = new QueryBuilder(
         Parcel.find(filter).populate({
             path: "sender driver",
@@ -244,10 +249,9 @@ const getMyParcels = async (
         .filter()
         .search(["goodType", "receiverPhone", "_id"])
         .sort()
-        .paginate()
-        .fields();
+        .paginate();
 
-    parcelQuery.modelQuery.select("goodType status totalDeliveryFee vehicleType pickupLocation.address dropLocation.address deliveryDate sameDayPickup numberOfGoods totalWeight dimension packagePhotos pdfDocument receiverPhone createdAt").lean();
+    parcelQuery.modelQuery.select(selectedFields).lean();
 
     const parcels = await parcelQuery.modelQuery;
     const meta = await parcelQuery.getPaginationInfo();
@@ -415,7 +419,7 @@ const acceptParcel = async (parcelId: string, driverId: string) => {
     return updatedParcel;
 };
 
-const getSingleParcel = async (id: string) => {
+const getSingleParcel = async (id: string, user?: JwtPayload) => {
     const parcel = await Parcel.findOne({ _id: id, status: { $ne: PARCEL_STATUS.CREATED } }).populate("sender driver");
 
     if (!parcel) {
@@ -436,6 +440,69 @@ const getSingleParcel = async (id: string) => {
     }
 
     parcelObj.review = review;
+
+    const baseFee = parcel.baseFare || 0;
+    const timeCost = parcel.timeCost || 0;
+    const fuelCost = parcel.fuelCost || 0;
+    const goodRisks = parcel.goodRisks || 0;
+    const operationFee = parcel.operationFee || 0;
+    const platformFee = parcel.platformFee || 0;
+
+    // Driver App Formulas (from stored DB fields)
+    const totalPrice = Number((baseFee + timeCost + fuelCost).toFixed(2));
+    const additionalCost = Number((goodRisks / 2).toFixed(2));
+    const totalRun = Number((totalPrice + additionalCost).toFixed(2));
+
+    // Admin Panel Formulas (from stored DB fields)
+    const overhead = operationFee;
+    const milesquadInsurance = Number((goodRisks / 2).toFixed(2));
+
+    // Customer App Formulas (from stored DB fields)
+    const totalOfRun = Number((totalPrice + overhead).toFixed(2));
+    const totalToPay = parcel.totalDeliveryFee || Number((totalOfRun + platformFee + goodRisks).toFixed(2));
+    const goodInsurance = goodRisks;
+    const serviceFee = Number((totalToPay - goodInsurance).toFixed(2));
+
+    // Admin Margin Formula
+    const marginMilesquad = Number((totalToPay - overhead - milesquadInsurance).toFixed(2));
+
+    const driverPricing = {
+        baseFee,
+        timeCost,
+        fuelCost,
+        totalPrice,
+        additionalCost,
+        totalRun,
+    };
+
+    const customerPricing = {
+        totalOfRun,
+        serviceFee,
+        goodInsurance,
+        totalToPay,
+    };
+
+    const adminPricing = {
+        overhead,
+        milesquadInsurance,
+        marginMilesquad,
+    };
+
+    const userRole = user?.role;
+
+    if (userRole === USER_ROLES.DRIVER) {
+        parcelObj.pricingDetails = driverPricing;
+    } else if (userRole === USER_ROLES.USER || userRole === "sender") {
+        parcelObj.pricingDetails = customerPricing;
+    } else if (userRole === "admin" || userRole === "super_admin" || userRole === "sub_admin") {
+        parcelObj.pricingDetails = {
+            driver: driverPricing,
+            customer: customerPricing,
+            admin: adminPricing,
+        };
+    } else {
+        parcelObj.pricingDetails = customerPricing;
+    }
 
     return parcelObj;
 };

@@ -103,7 +103,7 @@ const getSingleFaq = catchAsync(async (req: Request, res: Response) => {
 })
 
 const getAllFaqs = catchAsync(async (req: Request, res: Response) => {
-  const result = await PublicServices.getAllFaqs()
+  const result = await PublicServices.getAllFaqs(req.query)
 
   sendResponse(res, {
     statusCode: StatusCodes.OK,

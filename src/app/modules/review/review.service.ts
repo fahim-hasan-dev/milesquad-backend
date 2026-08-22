@@ -100,7 +100,39 @@ const deleteReview = async (id: string) => {
   if (!isExist) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Review not found')
   }
+
+  const driverId = isExist.driver
   const result = await Review.findByIdAndDelete(id)
+
+  if (driverId) {
+    const stats = await Review.aggregate([
+      { $match: { driver: new mongoose.Types.ObjectId(String(driverId)) } },
+      {
+        $group: {
+          _id: '$driver',
+          averageRating: { $avg: '$rating' },
+          totalRating: { $sum: 1 }
+        }
+      }
+    ])
+
+    if (stats.length > 0) {
+      await User.findByIdAndUpdate(driverId, {
+        $set: {
+          'driverInfo.averageRating': Number(stats[0].averageRating.toFixed(1)),
+          'driverInfo.totalRating': stats[0].totalRating
+        }
+      })
+    } else {
+      await User.findByIdAndUpdate(driverId, {
+        $set: {
+          'driverInfo.averageRating': 0,
+          'driverInfo.totalRating': 0
+        }
+      })
+    }
+  }
+
   return result
 }
 

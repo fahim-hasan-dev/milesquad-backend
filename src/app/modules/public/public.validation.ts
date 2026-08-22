@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PUBLIC_TYPE } from '../../../enum/public'
 
 const contactZodSchema = z.object({
   body: z.object({
@@ -20,15 +21,19 @@ const contactZodSchema = z.object({
 export const PublicValidation = {
   create: z.object({
     body: z.object({
-      content: z.string(),
-      type: z.enum(['refund-policy', 'terms-and-condition','contact','about']),
+      content: z.string({ required_error: 'Content is required' }),
+      type: z.nativeEnum(PUBLIC_TYPE, {
+        errorMap: () => ({ message: 'Invalid public content type' }),
+      }),
     }),
   }),
 
   update: z.object({
     body: z.object({
-      content: z.string(),
-      type: z.enum(['refund policy', 'terms-and-condition','contact','about']),
+      content: z.string({ required_error: 'Content is required' }),
+      type: z.nativeEnum(PUBLIC_TYPE, {
+        errorMap: () => ({ message: 'Invalid public content type' }),
+      }),
     }),
   }),
   contactZodSchema,
@@ -37,8 +42,9 @@ export const PublicValidation = {
 export const FaqValidations = {
   create: z.object({
     body: z.object({
-      question: z.string(),
-      answer: z.string(),
+      question: z.string({ required_error: 'Question is required' }),
+      answer: z.string({ required_error: 'Answer is required' }),
+      target: z.enum(['customer', 'rider', 'all']).optional(),
     }),
   }),
 
@@ -46,6 +52,7 @@ export const FaqValidations = {
     body: z.object({
       question: z.string().optional(),
       answer: z.string().optional(),
+      target: z.enum(['customer', 'rider', 'all']).optional(),
     }),
   }),
 }

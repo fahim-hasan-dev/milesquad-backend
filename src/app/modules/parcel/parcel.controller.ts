@@ -75,7 +75,8 @@ const acceptParcel = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getSingleParcel = catchAsync(async (req: Request, res: Response) => {
-    const result = await ParcelServices.getSingleParcel(req.params.id);
+    const user = req.user as JwtPayload;
+    const result = await ParcelServices.getSingleParcel(req.params.id, user);
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,

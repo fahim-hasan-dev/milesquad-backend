@@ -32,9 +32,7 @@ const createPublic = async (payload: IPublic) => {
   return `${payload.type} created successfully}`
 }
 
-const getAllPublics = async (
-  type: 'privacy-policy' | 'terms-and-condition',
-) => {
+const getAllPublics = async (type: string) => {
   const result = await Public.findOne({ type: type }).lean()
   return result || null
 }
@@ -102,8 +100,12 @@ const createFaq = async (payload: IFaq) => {
   return result
 }
 
-const getAllFaqs = async () => {
-  const result = await Faq.find({})
+const getAllFaqs = async (query: Record<string, unknown> = {}) => {
+  const filter: Record<string, any> = {}
+  if (query.target) {
+    filter.target = { $in: [query.target, 'all'] }
+  }
+  const result = await Faq.find(filter)
   return result || []
 }
 

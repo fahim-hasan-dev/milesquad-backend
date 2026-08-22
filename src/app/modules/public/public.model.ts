@@ -1,10 +1,11 @@
 import { Schema, model } from 'mongoose'
 import { ContactModel, FaqModel, IContact, IFaq, IPublic, PublicModel } from './public.interface'
+import { PUBLIC_TYPE } from '../../../enum/public'
 
 const publicSchema = new Schema<IPublic, PublicModel>(
   {
-    content: { type: String },
-    type: { type: String, enum: ['refund-policy', 'terms-and-condition','contact','about'] },
+    content: { type: String, required: true },
+    type: { type: String, enum: Object.values(PUBLIC_TYPE), required: true },
   },
   {
     timestamps: true,
@@ -17,6 +18,7 @@ const faqSchema = new Schema<IFaq, FaqModel>(
   {
     question: { type: String },
     answer: { type: String },
+    target: { type: String, enum: ['customer', 'rider', 'all'], default: 'all' },
     createdAt: { type: Date },
     updatedAt: { type: Date },
   },
