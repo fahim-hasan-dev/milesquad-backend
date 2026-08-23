@@ -41,6 +41,7 @@ export type IUser = {
         rejectReason?: string;
         totalRating: number;
         averageRating: number;
+        wallet: number;
     };
 };
 

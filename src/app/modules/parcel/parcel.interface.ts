@@ -83,6 +83,7 @@ export type IParcel = {
     receiverPhone: string;
     isDriverAssigned: boolean;
     driver?: Types.ObjectId;
+    partner?: Types.ObjectId;
     status: PARCEL_STATUS;
     statusProgress?: IStatusProgress;
     note?: string;

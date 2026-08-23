@@ -122,6 +122,10 @@ const ParcelSchema = new Schema<IParcel>(
             type: Schema.Types.ObjectId,
             ref: "User",
         },
+        partner: {
+            type: Schema.Types.ObjectId,
+            ref: "Partner",
+        },
         status: {
             type: String,
             enum: Object.values(PARCEL_STATUS),

@@ -80,8 +80,25 @@ const getNearbyParcelsSchema = z.object({
     }),
 });
 
+const selectPaymentMethodSchema = z.object({
+    body: z.object({
+        paymentMethod: z.nativeEnum(PAYMENT_METHOD, {
+            required_error: "Payment method is required",
+        }),
+    }),
+});
+
+const assignParcelSchema = z.object({
+    body: z.object({
+        assigneeId: z.string({ required_error: "Assignee ID is required" }),
+        type: z.enum(['driver', 'partner']).optional().default('driver'),
+    }),
+});
+
 export const ParcelValidation = {
     createParcelSchema,
     updateParcelSchema,
     getNearbyParcelsSchema,
+    selectPaymentMethodSchema,
+    assignParcelSchema,
 };

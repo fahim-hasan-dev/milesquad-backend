@@ -19,6 +19,8 @@ import { ADMIN_ROLES, USER_ROLES } from "../../../enum/user";
 import { Review } from "../review/review.model";
 import { calculateParcelPricing } from "../../../utils/pricingCalculator.util";
 import { User } from "../user/user.model";
+import { Partner } from "../partner/partner.model";
+import { emailHelper } from "../../../helpers/emailHelper";
 
 const updateStatusProgress = (
     currentProgress: Partial<IStatusProgress> = {},
@@ -126,6 +128,36 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
     const allFareSettings = systemSettings.fareSettings || {} as any;
     const selectedVehicleFareSettings = allFareSettings[selectedVehicleType];
 
+    if (!selectedVehicleFareSettings) {
+        throw new ApiError(
+            StatusCodes.BAD_REQUEST,
+            `Fare settings not found for ${payload.vehicleType}.`
+        );
+    }
+
+    const parcelWeight = payload.totalWeight || 0;
+    const vehicleMaxWeight = selectedVehicleFareSettings.maxWeight || 0;
+    const vehicleMaxVolume = selectedVehicleFareSettings.maxVolume || 0;
+
+    if (vehicleMaxWeight > 0 && parcelWeight > vehicleMaxWeight) {
+        throw new ApiError(
+            StatusCodes.BAD_REQUEST,
+            `Parcel exceeds max weight for ${payload.vehicleType}. Please select a larger vehicle.`
+        );
+    }
+
+    const lengthCm = payload.dimension?.length ?? 0;
+    const widthCm = payload.dimension?.width ?? 0;
+    const heightCm = payload.dimension?.height ?? 0;
+    const parcelVolume = Number((lengthCm * widthCm * heightCm * 1e-6).toFixed(6));
+
+    if (vehicleMaxVolume > 0 && parcelVolume > vehicleMaxVolume) {
+        throw new ApiError(
+            StatusCodes.BAD_REQUEST,
+            `Parcel exceeds max size for ${payload.vehicleType}. Please select a larger vehicle.`
+        );
+    }
+
     const isScheduledDelivery = payload.sameDayPickup === false || (payload.deliveryDate > new Date());
 
     const calculatedPricing = calculateParcelPricing({
@@ -137,26 +169,6 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
         fareSetting: selectedVehicleFareSettings,
         isScheduled: isScheduledDelivery,
     });
-
-    if (selectedVehicleFareSettings) {
-        const vehicleMaxWeight = selectedVehicleFareSettings.maxWeight || 0;
-        const vehicleMaxVolume = selectedVehicleFareSettings.maxVolume || 0;
-        const parcelWeight = payload.totalWeight || 0;
-
-        if (vehicleMaxWeight > 0 && parcelWeight > vehicleMaxWeight) {
-            throw new ApiError(
-                StatusCodes.BAD_REQUEST,
-                `Parcel weight (${parcelWeight} kg) exceeds the maximum allowed limit (${vehicleMaxWeight} kg) for a ${payload.vehicleType}. Please select a larger vehicle.`
-            );
-        }
-
-        if (vehicleMaxVolume > 0 && calculatedPricing.volume > vehicleMaxVolume) {
-            throw new ApiError(
-                StatusCodes.BAD_REQUEST,
-                `Parcel volume (${calculatedPricing.volume} m³) exceeds the maximum allowed limit (${vehicleMaxVolume} m³) for a ${payload.vehicleType}. Please select a larger vehicle.`
-            );
-        }
-    }
 
     payload.baseFee = calculatedPricing.baseFee;
     payload.baseFare = calculatedPricing.baseFare;
@@ -186,43 +198,84 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
     payload.totalDeliveryFee = calculatedPricing.totalDeliveryFee;
 
     payload.sender = new Types.ObjectId(user.authId || user.id);
-
-    const isHandCash = payload.paymentMethod === PAYMENT_METHOD.HAND_CASH;
-
-    if (isHandCash) {
-        payload.status = PARCEL_STATUS.PENDING;
-        payload.statusProgress = updateStatusProgress({}, PARCEL_STATUS.PENDING);
-    } else {
-        payload.status = PARCEL_STATUS.CREATED;
-        payload.statusProgress = updateStatusProgress({}, PARCEL_STATUS.CREATED);
-    }
+    payload.status = PARCEL_STATUS.CREATED;
+    payload.statusProgress = updateStatusProgress({}, PARCEL_STATUS.CREATED);
 
     const createdParcel = await Parcel.create(payload);
+    return createdParcel;
+};
 
-    let paymentLink: string | null = null;
+const selectPaymentMethod = async (
+    id: string,
+    user: JwtPayload,
+    paymentMethod: PAYMENT_METHOD
+) => {
+    const parcel = await Parcel.findById(id);
 
-    if (!isHandCash) {
+    if (!parcel) {
+        throw new ApiError(StatusCodes.NOT_FOUND, "Parcel not found");
+    }
+
+    const currentUserId = user.authId || user.id;
+    if (parcel.sender.toString() !== currentUserId) {
+        throw new ApiError(StatusCodes.FORBIDDEN, "You do not own this parcel");
+    }
+
+    if (parcel.status !== PARCEL_STATUS.CREATED) {
+        throw new ApiError(
+            StatusCodes.BAD_REQUEST,
+            `Cannot select payment method for parcel with current status: ${parcel.status}`
+        );
+    }
+
+    if (paymentMethod === PAYMENT_METHOD.ONLINE) {
+        parcel.paymentMethod = PAYMENT_METHOD.ONLINE;
+        await parcel.save();
+
         await parcelCleanupQueue.add(
             'cleanupUnpaidParcel',
-            { parcelId: createdParcel._id.toString() },
+            { parcelId: parcel._id.toString() },
             { delay: 60 * 60 * 1000 }
         );
 
-        paymentLink = await createPaymentSession(user, calculatedPricing.totalDeliveryFee, createdParcel._id.toString());
+        const amountToPay = parcel.totalToPay || parcel.totalDeliveryFee;
+        const paymentLink = await createPaymentSession(
+            user,
+            amountToPay,
+            parcel._id.toString()
+        );
+
+        return {
+            paymentMethod: PAYMENT_METHOD.ONLINE,
+            paymentUrl: paymentLink,
+            message: "Payment link generated successfully. Please complete payment to confirm your order.",
+        };
+    } else if (paymentMethod === PAYMENT_METHOD.HAND_CASH) {
+        parcel.paymentMethod = PAYMENT_METHOD.HAND_CASH;
+        parcel.status = PARCEL_STATUS.PENDING;
+        parcel.statusProgress = updateStatusProgress(parcel.statusProgress, PARCEL_STATUS.PENDING);
+
+        const updatedParcel = await parcel.save();
+
+        return {
+            paymentMethod: PAYMENT_METHOD.HAND_CASH,
+            parcel: updatedParcel,
+            message: "Cash payment selected. Your parcel order is confirmed and pending driver assignment.",
+        };
     }
 
-    return { parcel: createdParcel, paymentLink };
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid payment method");
 };
 
 const getAllParcels = async (query: Record<string, unknown>) => {
-    const defaultFields = "goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver createdAt";
+    const defaultFields = "goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
     const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
 
     const parcelQuery = new QueryBuilder(
-        Parcel.find({ status: { $ne: PARCEL_STATUS.CREATED } }).populate({
-            path: "sender driver",
-            select: "fullName phone image"
-        }),
+        Parcel.find({ status: { $ne: PARCEL_STATUS.CREATED } }).populate([
+            { path: "sender driver", select: "fullName phone image" },
+            { path: "partner", select: "fullName phone rolePosition email" }
+        ]),
         query
     )
         .search(["goodType", "receiverPhone"])
@@ -247,14 +300,14 @@ const getMyParcels = async (
         ? { driver: userId, status: { $ne: PARCEL_STATUS.CREATED } }
         : { sender: userId, status: { $ne: PARCEL_STATUS.CREATED } };
 
-    const defaultFields = "goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver createdAt";
+    const defaultFields = "goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
     const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
 
     const parcelQuery = new QueryBuilder(
-        Parcel.find(filter).populate({
-            path: "sender driver",
-            select: "fullName phone image driverInfo.averageRating driverInfo.totalRating"
-        }),
+        Parcel.find(filter).populate([
+            { path: "sender driver", select: "fullName phone image driverInfo.averageRating driverInfo.totalRating" },
+            { path: "partner", select: "fullName phone rolePosition email" }
+        ]),
         query
     )
         .filter()
@@ -412,12 +465,13 @@ const acceptParcel = async (parcelId: string, driverId: string) => {
         parcelId,
         {
             driver: driverId,
+            partner: null,
             isDriverAssigned: true,
             status: PARCEL_STATUS.ON_THE_WAY_TO_PICKUP,
             statusProgress: updatedProgress,
         },
         { new: true }
-    ).populate("sender driver");
+    ).populate("sender driver partner");
 
     await NotificationService.insertNotification({
         receiver: parcel.sender,
@@ -431,7 +485,7 @@ const acceptParcel = async (parcelId: string, driverId: string) => {
 };
 
 const getSingleParcel = async (id: string, user?: JwtPayload) => {
-    const parcel = await Parcel.findOne({ _id: id, status: { $ne: PARCEL_STATUS.CREATED } }).populate("sender driver");
+    const parcel = await Parcel.findOne({ _id: id, status: { $ne: PARCEL_STATUS.CREATED } }).populate("sender driver partner");
 
     if (!parcel) {
         throw new ApiError(StatusCodes.NOT_FOUND, "Parcel not found");
@@ -568,6 +622,16 @@ const updateParcel = async (
         payload.deliveredAt = new Date();
         await trackingService.removeDriverTracking(id, parcel.driver!.toString());
 
+        // Credit driver's wallet balance if parcel was paid online
+        if (parcel.driver && parcel.paymentMethod === PAYMENT_METHOD.ONLINE) {
+            const driverPayout = parcel.totalRun || parcel.driverShare || 0;
+            if (driverPayout > 0) {
+                await User.findByIdAndUpdate(parcel.driver, {
+                    $inc: { 'driverInfo.wallet': driverPayout },
+                });
+            }
+        }
+
         await NotificationService.insertNotification({
             receiver: parcel.sender,
             title: "Parcel Delivered",
@@ -670,12 +734,15 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
     const updatedParcel = await Parcel.findByIdAndUpdate(
         id,
         {
-            status: PARCEL_STATUS.CANCELLED,
-            isDriverAssigned: false,
-            statusProgress: updatedProgress,
+            $unset: { driver: 1, partner: 1 },
+            $set: {
+                status: PARCEL_STATUS.CANCELLED,
+                isDriverAssigned: false,
+                statusProgress: updatedProgress,
+            }
         },
         { new: true }
-    ).populate("sender driver");
+    ).populate("sender driver partner");
 
     if (parcel.driver) {
         await trackingService.removeDriverTracking(id, parcel.driver.toString());
@@ -692,7 +759,6 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
             title: "Parcel Cancelled",
             message: `The parcel "${parcel.goodType || "Parcel"}" was cancelled.`,
             screen: "PARCEL_DETAILS",
-            type: recipient.role
         });
     }
 
@@ -707,8 +773,112 @@ const deleteParcel = async (id: string) => {
     return await Parcel.findByIdAndDelete(id);
 };
 
+const assignParcelByAdmin = async (
+    parcelId: string,
+    assigneeId: string,
+    type: 'driver' | 'partner' = 'driver'
+) => {
+    const parcel = await Parcel.findById(parcelId);
+
+    if (!parcel) {
+        throw new ApiError(StatusCodes.NOT_FOUND, "Parcel not found");
+    }
+
+    if (parcel.status !== PARCEL_STATUS.PENDING) {
+        throw new ApiError(
+            StatusCodes.BAD_REQUEST,
+            `Cannot assign delivery agent. Parcel status must be pending (Current status: ${parcel.status}).`
+        );
+    }
+
+    if (parcel.isDriverAssigned || parcel.driver || parcel.partner) {
+        throw new ApiError(
+            StatusCodes.CONFLICT,
+            "Parcel is already assigned to a driver or partner. Overwriting is not allowed."
+        );
+    }
+
+    const updateData: Record<string, any> = {
+        isDriverAssigned: true,
+        status: PARCEL_STATUS.RIDER_ASSIGNED,
+    };
+
+    let assigneeUser: any = null;
+
+    if (type === 'partner') {
+        assigneeUser = await Partner.findById(assigneeId);
+        if (!assigneeUser) {
+            throw new ApiError(StatusCodes.NOT_FOUND, "Selected partner not found.");
+        }
+        updateData.partner = assigneeId;
+        updateData.driver = null;
+    } else {
+        assigneeUser = await User.findById(assigneeId);
+        if (!assigneeUser) {
+            throw new ApiError(StatusCodes.NOT_FOUND, "Selected driver user not found.");
+        }
+        updateData.driver = assigneeId;
+        updateData.partner = null;
+    }
+
+    const updatedProgress = updateStatusProgress(parcel.statusProgress, PARCEL_STATUS.RIDER_ASSIGNED);
+    updateData.statusProgress = updatedProgress;
+
+    const updatedParcel = await Parcel.findByIdAndUpdate(
+        parcelId,
+        updateData,
+        { new: true }
+    ).populate("sender driver partner");
+
+    try {
+        if (type === 'partner' && assigneeUser?.email) {
+            await emailHelper.sendEmail({
+                to: assigneeUser.email,
+                subject: "New Parcel Delivery Assigned - Milesquad",
+                html: `
+                  <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                    <h2 style="color: #2ecc71;">New Parcel Delivery Assignment</h2>
+                    <p>Dear <strong>${assigneeUser.fullName}</strong>,</p>
+                    <p>You have been assigned a new parcel delivery order by the Milesquad Admin team.</p>
+                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #2ecc71;">
+                      <p style="margin: 5px 0;"><strong>Parcel ID:</strong> ${parcel._id}</p>
+                      <p style="margin: 5px 0;"><strong>Good Type:</strong> ${parcel.goodType || "N/A"}</p>
+                      <p style="margin: 5px 0;"><strong>Pickup Address:</strong> ${parcel.pickupLocation?.address || "N/A"}</p>
+                      <p style="margin: 5px 0;"><strong>Delivery Address:</strong> ${parcel.dropLocation?.address || "N/A"}</p>
+                      <p style="margin: 5px 0;"><strong>Receiver Phone:</strong> ${parcel.receiverPhone || "N/A"}</p>
+                    </div>
+                    <p>Please manage this delivery through your partner portal.</p>
+                    <p>Best regards,<br/>Milesquad Operations Team</p>
+                  </div>
+                `,
+            });
+        } else if (type === 'driver' && assigneeUser) {
+            await NotificationService.insertNotification({
+                receiver: assigneeUser._id,
+                title: "New Delivery Assigned",
+                message: `You have been assigned to deliver a parcel by admin.`,
+                screen: "PARCEL_DETAILS",
+                type: assigneeUser.role,
+            });
+        }
+
+        await NotificationService.insertNotification({
+            receiver: parcel.sender,
+            title: "Delivery Agent Assigned",
+            message: `A ${type} (${assigneeUser?.fullName || 'agent'}) has been assigned to your parcel delivery by admin.`,
+            screen: "PARCEL_TRACKING",
+            type: USER_ROLES.CUSTOMER,
+        });
+    } catch (error) {
+        console.log("Failed to send assignment notifications/email:", error);
+    }
+
+    return updatedParcel;
+};
+
 export const ParcelServices = {
     createParcel,
+    selectPaymentMethod,
     getAllParcels,
     getMyParcels,
     getNearbyParcels,
@@ -718,4 +888,5 @@ export const ParcelServices = {
     updateParcel,
     cancelParcel,
     deleteParcel,
+    assignParcelByAdmin,
 };

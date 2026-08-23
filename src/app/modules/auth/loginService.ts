@@ -19,13 +19,10 @@ const handleLoginLogic = async (payload: ILoginData, isUserExist: IUser): Promis
 
     await User.findByIdAndUpdate(isUserExist._id, {
       $set: {
-        authentication: {
-          ...authentication,
-          oneTimeCode: otp,
-          expiresAt: otpExpiresIn,
-          latestRequestAt: new Date(),
-          authType: 'createAccount',
-        },
+        'authentication.oneTimeCode': otp,
+        'authentication.expiresAt': otpExpiresIn,
+        'authentication.latestRequestAt': new Date(),
+        'authentication.authType': 'createAccount',
       },
     });
 
@@ -37,7 +34,16 @@ const handleLoginLogic = async (payload: ILoginData, isUserExist: IUser): Promis
 
     return authResponse(
       StatusCodes.PROXY_AUTHENTICATION_REQUIRED,
-      `An OTP has been sent to your phone ${isUserExist.phone}. Please verify.`
+      `Your account is not verified. A new OTP has been sent to ${isUserExist.phone}. Please verify your account before logging in.`,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        isPhoneVerified: false,
+        phone: isUserExist.phone,
+        ...(process.env.NODE_ENV === 'development' ? { otp } : {}),
+      } as any
     );
   }
 

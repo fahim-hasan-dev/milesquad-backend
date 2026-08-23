@@ -16,6 +16,20 @@ router.post(
     ParcelController.createParcel
 );
 
+router.post(
+    "/confirm-payment/:id",
+    auth(USER_ROLES.CUSTOMER),
+    validateRequest(ParcelValidation.selectPaymentMethodSchema),
+    ParcelController.selectPaymentMethod
+);
+
+router.patch(
+    "/assign/:id",
+    auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+    validateRequest(ParcelValidation.assignParcelSchema),
+    ParcelController.assignParcelByAdmin
+);
+
 router.get(
     "/calculate-distance",
     ParcelController.calculateDistance

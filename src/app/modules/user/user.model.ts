@@ -110,6 +110,7 @@ const UserSchema = new Schema<IUser, UserModel>(
                 rejectReason: { type: String, default: "" },
                 totalRating: { type: Number, default: 0 },
                 averageRating: { type: Number, default: 0 },
+                wallet: { type: Number, default: 0 },
             },
             default: undefined,
         },

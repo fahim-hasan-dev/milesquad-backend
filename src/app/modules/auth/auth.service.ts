@@ -54,6 +54,7 @@ export const createUser = async (payload: IUser) => {
       rejectReason: '',
       totalRating: 0,
       averageRating: 0,
+      wallet: 0,
     };
   } else {
     delete payload.driverInfo;
@@ -95,7 +96,7 @@ const login = async (payload: ILoginData): Promise<IAuthResponse> => {
 
   const existingUser = await User.findOne({
     phone,
-    status: { $in: [USER_STATUS.ACTIVE, USER_STATUS.RESTRICTED] },
+    status: { $ne: USER_STATUS.DELETED },
   })
     .select('+password +authentication')
     .lean();

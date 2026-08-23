@@ -134,8 +134,38 @@ const calculateDistance = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const selectPaymentMethod = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user as JwtPayload;
+    const { id } = req.params;
+    const { paymentMethod } = req.body;
+
+    const result = await ParcelServices.selectPaymentMethod(id, user, paymentMethod);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: result.message,
+        data: result,
+    });
+});
+
+const assignParcelByAdmin = catchAsync(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { assigneeId, type } = req.body;
+
+    const result = await ParcelServices.assignParcelByAdmin(id, assigneeId, type);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: `Parcel assigned to ${type || 'driver'} successfully`,
+        data: result,
+    });
+});
+
 export const ParcelController = {
     createParcel,
+    selectPaymentMethod,
     getAllParcels,
     getMyParcels,
     getNearbyParcels,
@@ -145,4 +175,5 @@ export const ParcelController = {
     updateParcel,
     cancelParcel,
     deleteParcel,
+    assignParcelByAdmin,
 };

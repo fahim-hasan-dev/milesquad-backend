@@ -77,6 +77,25 @@ const updateProfile = async (
            },0)
     }
 
+    if (existingUser.role === USER_ROLES.DRIVER && existingUser.driverInfo) {
+        const hasDriverDocUpdates = payload.driverInfo && (
+            payload.driverInfo.nidFront ||
+            payload.driverInfo.nidBack ||
+            payload.driverInfo.drivingLicense ||
+            payload.driverInfo.criminalReport ||
+            payload.driverInfo.vehicleType
+        );
+
+        if (hasDriverDocUpdates && existingUser.driverInfo.profileVerification === PROFILE_VERIFICATION_STATUS.REJECTED) {
+            payload.driverInfo = {
+                ...existingUser.driverInfo,
+                ...payload.driverInfo,
+                profileVerification: PROFILE_VERIFICATION_STATUS.RESUBMITTED,
+                rejectReason: '',
+            };
+        }
+    }
+
     const updatedUser: any = await User.findOneAndUpdate(
         { _id: userId, status: { $ne: USER_STATUS.DELETED } },
         payload,

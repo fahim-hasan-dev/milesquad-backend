@@ -18,9 +18,9 @@ const customLogin = catchAsync(async (req: Request, res: Response) => {
 
   sendResponse(res, {
     statusCode: status,
-    success: true,
+    success: status === StatusCodes.OK,
     message,
-    data: { accessToken, refreshToken, userInfo },
+    data: accessToken ? { accessToken, refreshToken, userInfo } : (userInfo || null),
   });
 });
 
