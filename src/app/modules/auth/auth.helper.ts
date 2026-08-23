@@ -6,14 +6,14 @@ import bcrypt from 'bcrypt';
 import { emailHelper } from '../../../helpers/emailHelper';
 import { emailTemplate } from '../../../shared/emailTemplate';
 
-const createToken = (authId: Types.ObjectId, role: string, name?: string, phoneOrEmail?: string, deviceToken?: string) => {
+const createToken = (authId: Types.ObjectId, role: string, name?: string, phoneOrEmail?: string) => {
   const accessToken = jwtHelper.createToken(
-    { authId, role, name, phoneOrEmail, deviceToken },
+    { authId, role, name, phoneOrEmail },
     config.jwt.jwt_secret as Secret,
     config.jwt.jwt_expire_in as string,
   );
   const refreshToken = jwtHelper.createToken(
-    { authId, role, name, phoneOrEmail, deviceToken },
+    { authId, role, name, phoneOrEmail },
     config.jwt.jwt_refresh_secret as Secret,
     config.jwt.jwt_refresh_expire_in as string,
   );

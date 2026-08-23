@@ -158,21 +158,32 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
         }
     }
 
+    payload.baseFee = calculatedPricing.baseFee;
     payload.baseFare = calculatedPricing.baseFare;
-    payload.totalDeliveryFee = calculatedPricing.totalDeliveryFee;
-    payload.platformCommission = calculatedPricing.platformCommission;
-    payload.driverShare = calculatedPricing.driverShare;
+    payload.fuelCost = calculatedPricing.fuelCost;
+    payload.timeCost = calculatedPricing.timeCost;
+    payload.goodRisks = calculatedPricing.goodRisks;
+
     payload.volume = calculatedPricing.volume;
     payload.volumeUtilization = calculatedPricing.volumeUtilization;
     payload.weightUtilization = calculatedPricing.weightUtilization;
     payload.effectiveUtilization = calculatedPricing.effectiveUtilization;
     payload.loadFactor = calculatedPricing.loadFactor;
-    payload.fuelCost = calculatedPricing.fuelCost;
-    payload.timeCost = calculatedPricing.timeCost;
-    payload.goodRisks = calculatedPricing.goodRisks;
-    payload.subtotalFee = calculatedPricing.subtotalFee;
-    payload.operationFee = calculatedPricing.operationFee;
-    payload.platformFee = calculatedPricing.platformFee;
+
+    payload.totalPrice = calculatedPricing.totalPrice;
+    payload.additionalCost = calculatedPricing.additionalCost;
+    payload.totalRun = calculatedPricing.totalRun;
+    payload.driverShare = calculatedPricing.driverShare;
+
+    payload.overhead = calculatedPricing.overhead;
+    payload.milesquadInsurance = calculatedPricing.milesquadInsurance;
+    payload.marginMilesquad = calculatedPricing.marginMilesquad;
+    payload.platformCommission = calculatedPricing.platformCommission;
+
+    payload.totalOfRun = calculatedPricing.totalOfRun;
+    payload.serviceFee = calculatedPricing.serviceFee;
+    payload.totalToPay = calculatedPricing.totalToPay;
+    payload.totalDeliveryFee = calculatedPricing.totalDeliveryFee;
 
     payload.sender = new Types.ObjectId(user.authId || user.id);
 
@@ -441,51 +452,26 @@ const getSingleParcel = async (id: string, user?: JwtPayload) => {
 
     parcelObj.review = review;
 
-    const baseFee = parcel.baseFare || 0;
-    const timeCost = parcel.timeCost || 0;
-    const fuelCost = parcel.fuelCost || 0;
-    const goodRisks = parcel.goodRisks || 0;
-    const operationFee = parcel.operationFee || 0;
-    const platformFee = parcel.platformFee || 0;
-
-    // Driver App Formulas (from stored DB fields)
-    const totalPrice = Number((baseFee + timeCost + fuelCost).toFixed(2));
-    const additionalCost = Number((goodRisks / 2).toFixed(2));
-    const totalRun = Number((totalPrice + additionalCost).toFixed(2));
-
-    // Admin Panel Formulas (from stored DB fields)
-    const overhead = operationFee;
-    const milesquadInsurance = Number((goodRisks / 2).toFixed(2));
-
-    // Customer App Formulas (from stored DB fields)
-    const totalOfRun = Number((totalPrice + overhead).toFixed(2));
-    const totalToPay = parcel.totalDeliveryFee || Number((totalOfRun + platformFee + goodRisks).toFixed(2));
-    const goodInsurance = goodRisks;
-    const serviceFee = Number((totalToPay - goodInsurance).toFixed(2));
-
-    // Admin Margin Formula
-    const marginMilesquad = Number((totalToPay - overhead - milesquadInsurance).toFixed(2));
-
     const driverPricing = {
-        baseFee,
-        timeCost,
-        fuelCost,
-        totalPrice,
-        additionalCost,
-        totalRun,
+        baseFee: parcel.baseFee || parcel.baseFare || 0,
+        timeCost: parcel.timeCost || 0,
+        fuelCost: parcel.fuelCost || 0,
+        totalPrice: parcel.totalPrice || 0,
+        additionalCost: parcel.additionalCost || 0,
+        totalRun: parcel.totalRun || parcel.driverShare || 0,
     };
 
     const customerPricing = {
-        totalOfRun,
-        serviceFee,
-        goodInsurance,
-        totalToPay,
+        totalOfRun: parcel.totalOfRun || 0,
+        serviceFee: parcel.serviceFee || 0,
+        goodInsurance: parcel.goodRisks || 0,
+        totalToPay: parcel.totalToPay || parcel.totalDeliveryFee || 0,
     };
 
     const adminPricing = {
-        overhead,
-        milesquadInsurance,
-        marginMilesquad,
+        overhead: parcel.overhead || 0,
+        milesquadInsurance: parcel.milesquadInsurance || 0,
+        marginMilesquad: parcel.marginMilesquad || parcel.platformCommission || 0,
     };
 
     const userRole = user?.role;

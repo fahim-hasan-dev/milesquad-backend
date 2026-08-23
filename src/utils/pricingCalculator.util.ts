@@ -8,7 +8,6 @@ export type IPricingInput = {
     itemValue: number;
     fareSetting?: IFareSetting;
     isScheduled?: boolean;
-    scheduleIndex?: number;
 };
 
 export type IPricingOutput = {
@@ -20,9 +19,18 @@ export type IPricingOutput = {
     fuelCost: number;
     timeCost: number;
     goodRisks: number;
-    subtotalFee: number;
-    platformFee: number;
-    operationFee: number;
+    baseFee: number;
+    totalPrice: number;
+    additionalCost: number;
+    totalRun: number;
+    overhead: number;
+    milesquadInsurance: number;
+    totalOfRun: number;
+    serviceFee: number;
+    totalToPay: number;
+    marginMilesquad: number;
+
+    // Compatibility aliases
     totalDeliveryFee: number;
     driverShare: number;
     platformCommission: number;
@@ -57,8 +65,6 @@ export const calculateParcelPricing = (input: IPricingInput): IPricingOutput => 
         durationText,
         itemValue = 0,
         fareSetting,
-        isScheduled = false,
-        scheduleIndex = 0,
     } = input;
 
     const baseFee = fareSetting?.baseFee ?? 0;
@@ -74,37 +80,36 @@ export const calculateParcelPricing = (input: IPricingInput): IPricingOutput => 
     const marginPercent = toFraction(fareSetting?.margin);
     const overheadPercent = toFraction(fareSetting?.overhead);
     const loadFactorIndex = toFraction(fareSetting?.loadFactor);
-    const scheduledDeliveryPercent = toFraction(fareSetting?.scheduledDelivery);
     const maxWeight = fareSetting?.maxWeight ?? 0;
     const maxVolume = fareSetting?.maxVolume ?? 0;
 
-    // 1. Volume of goods (m^3) = L x W x H (in cm) * 1e-6
+    // 1. Volume of the goods (m^3) = L x W x H (in cm for Senegal) * 1x10-6
     const lengthCm = dimension.length ?? 0;
     const widthCm = dimension.width ?? 0;
     const heightCm = dimension.height ?? 0;
     const volume = Number((lengthCm * widthCm * heightCm * 1e-6).toFixed(6));
 
-    // 2. Volume utilization (%) = Volume of goods / Vehicle max volume
+    // 2. Volume utilization (%) = Volume of the goods / Vehicle maximum volume
     const volumeUtilization = maxVolume > 0 ? volume / maxVolume : 0;
 
-    // 3. Weight utilization (%) = Weight of goods / Vehicle max capacity
+    // 3. Weight utilization (%) = Weight of goods / Vehicle maximum capacity
     const weightUtilization = maxWeight > 0 ? totalWeight / maxWeight : 0;
 
-    // 4. Effective utilization (%) = Max(Volume utilization, Weight utilization)
+    // 4. Effective utilization (%) = Max (Volume utilization, Weight utilization)
     const effectiveUtilization = Math.max(volumeUtilization, weightUtilization);
 
-    // 5. Load factor = 1 + (Effective utilization x load factor index)
+    // 5. Load factor = 1 + (Effective Utilization x load factor index)
     const loadFactor = Number((1 + (effectiveUtilization * loadFactorIndex)).toFixed(4));
 
     // 6. Fuel cost = Fuel rate x Load factor x distance
     const fuelCost = Number((fuelRate * loadFactor * distanceKm).toFixed(2));
 
-    // 7. Time cost = Time rate x Max(0, duration - Free time)
+    // 7. Time cost = Time rate x (duration – Free time)
     const durationMinutes = parseDurationToMinutes(durationText);
     const billableTime = Math.max(0, durationMinutes - freeTime);
     const timeCost = Number((timeRate * billableTime).toFixed(2));
 
-    // 8. Good risks = Risk index % x good value
+    // 8. Good risks = Risk index x itemValue
     let riskIndexPercent = 0;
     if (itemValue < 100000) {
         riskIndexPercent = fareSetting?.riskIndex1 ?? 0;
@@ -115,23 +120,33 @@ export const calculateParcelPricing = (input: IPricingInput): IPricingOutput => 
     }
     const goodRisks = Number(((riskIndexPercent / 100) * itemValue).toFixed(2));
 
-    // 9. Subtotal fee = Base fee + Time cost + Fuel cost + Good risks
-    const subtotalFee = Number((baseFee + timeCost + fuelCost + goodRisks).toFixed(2));
+    // 9. Total price = Base fee + Time cost + Fuel cost (Driver app)
+    const totalPrice = Number((baseFee + timeCost + fuelCost).toFixed(2));
 
-    // 10. Platform fee & Operation fee & Rider total cost
-    const platformFee = Number((subtotalFee * marginPercent).toFixed(2));
-    const driverShare = Number((subtotalFee * (1 - marginPercent)).toFixed(2));
-    const operationFee = Number((subtotalFee * overheadPercent).toFixed(2));
+    // 10. Additional cost = good risks / 2 (Driver app)
+    const additionalCost = Number((goodRisks / 2).toFixed(2));
 
-    // 11. Customer total cost
-    let totalDeliveryFee = subtotalFee + platformFee;
-    if (isScheduled) {
-        const scheduledBonus = scheduledDeliveryPercent > 0 ? scheduledDeliveryPercent : (scheduleIndex > 0 ? scheduleIndex : 0.1);
-        totalDeliveryFee = (subtotalFee + platformFee + operationFee) * (1 + scheduledBonus);
-    }
-    totalDeliveryFee = Math.ceil(totalDeliveryFee);
+    // 11. Total run: Total price + Additional cost (Driver app)
+    const totalRun = Number((totalPrice + additionalCost).toFixed(2));
 
-    const platformCommission = Number((totalDeliveryFee - driverShare).toFixed(2));
+    // 12. Overhead (Milesquad) = Total price x Overhead (%) (Admin panel)
+    const overhead = Number((totalPrice * overheadPercent).toFixed(2));
+
+    // 13. Milesquad insurance: good risk / 2 (Admin panel)
+    const milesquadInsurance = Number((goodRisks / 2).toFixed(2));
+
+    // 14. Total of the run: (Total price + Overhead) (Customer app)
+    const totalOfRun = Number((totalPrice + overhead).toFixed(2));
+
+    // 15. Service fee: (Total price + Overhead) / (1 - Margin) (Customer app)
+    const denominator = marginPercent < 1 ? (1 - marginPercent) : 1;
+    const serviceFee = Number(((totalPrice + overhead) / denominator).toFixed(2));
+
+    // 16. Total to pay: (Total price + Overhead) / (1 - Margin) + (good risks) (Customer app)
+    const totalToPay = Math.ceil(serviceFee + goodRisks);
+
+    // 17. Margin Milesquad: Total to pay – Overhead – Milesquad insurance (Admin panel profit)
+    const marginMilesquad = Number((totalToPay - overhead - milesquadInsurance - totalRun).toFixed(2));
 
     return {
         volume,
@@ -142,12 +157,21 @@ export const calculateParcelPricing = (input: IPricingInput): IPricingOutput => 
         fuelCost,
         timeCost,
         goodRisks,
-        subtotalFee,
-        platformFee,
-        operationFee,
-        totalDeliveryFee,
-        driverShare,
-        platformCommission,
+        baseFee,
+        totalPrice,
+        additionalCost,
+        totalRun,
+        overhead,
+        milesquadInsurance,
+        totalOfRun,
+        serviceFee,
+        totalToPay,
+        marginMilesquad,
+
+        // Aliases for compatibility
+        totalDeliveryFee: totalToPay,
+        driverShare: totalRun,
+        platformCommission: marginMilesquad,
         baseFare: baseFee,
     };
 };

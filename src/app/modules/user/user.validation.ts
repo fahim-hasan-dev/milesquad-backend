@@ -25,7 +25,6 @@ export const userLoginSchema = z.object({
   body: z.object({
     phone: z.string().min(1, "Phone number is required"),
     password: z.string().min(1, "Password is required"),
-    deviceToken: z.string().optional(),
   })
 });
 
@@ -60,9 +59,17 @@ export const changePasswordSchema = z.object({
   })
 });
 
+export const approveDriverZodSchema = z.object({
+  body: z.object({
+    status: z.nativeEnum(PROFILE_VERIFICATION_STATUS),
+    rejectReason: z.string().optional(),
+  })
+});
+
 export const UserValidations = {
   userSignupSchema,
   userLoginSchema,
   userUpdateSchema,
   changePasswordSchema,
+  approveDriverZodSchema,
 };

@@ -8,11 +8,12 @@ import sharp from 'sharp'
 
 type IFolderName =
   | 'image'
-  | 'media'
-  | 'documents'
-  | 'logo'
-  | 'lostImage'
-  | 'shippingLabel'
+  | 'files'
+  | 'images'
+  | 'nidFront'
+  | 'nidBack'
+  | 'drivingLicense'
+  | 'criminalReport'
 
 interface ProcessedFiles {
   [key: string]: string | string[] | undefined
@@ -20,11 +21,12 @@ interface ProcessedFiles {
 
 const uploadFields = [
   { name: 'image', maxCount: 1 },
-  { name: 'media', maxCount: 3 },
-  { name: 'documents', maxCount: 3 },
-  { name: 'logo', maxCount: 1 },
-  { name: 'lostImage', maxCount: 4 },
-  { name: 'shippingLabel', maxCount: 1 },
+  { name: 'files', maxCount: 5 },
+  { name: 'images', maxCount: 5 },
+  { name: 'nidFront', maxCount: 1 },
+  { name: 'nidBack', maxCount: 1 },
+  { name: 'drivingLicense', maxCount: 1 },
+  { name: 'criminalReport', maxCount: 1 },
 ] as const
 
 export const fileAndBodyProcessorUsingDiskStorage = () => {
@@ -57,18 +59,14 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
     cb: FileFilterCallback,
   ) => {
     try {
-      const allowedTypes = {
-        image: ['image/jpeg', 'image/png', 'image/jpg'],
-        media: ['video/mp4', 'audio/mpeg'],
-        documents: ['application/pdf'],
-        logo: ['image/jpeg', 'image/png', 'image/jpg'],
-        lostImage: ['image/jpeg', 'image/png', 'image/jpg'],
-        shippingLabel: [
-          'image/jpeg',
-          'image/png',
-          'image/jpg',
-          'application/pdf',
-        ],
+      const allowedTypes: Record<IFolderName, string[]> = {
+        image: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'],
+        files: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'video/mp4', 'audio/mpeg', 'audio/mp3', 'application/pdf'],
+        images: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'],
+        nidFront: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'],
+        nidBack: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'],
+        drivingLicense: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'],
+        criminalReport: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'],
       };
 
       const fieldType = file.fieldname as IFolderName;
@@ -94,7 +92,7 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
   const upload = multer({
     storage,
     fileFilter,
-    limits: { fileSize: 10 * 1024 * 1024, files: 50 },
+    limits: { fileSize: 15 * 1024 * 1024, files: 50 },
   }).fields(uploadFields);
 
   return (req: Request, res: Response, next: NextFunction) => {
@@ -127,7 +125,7 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
                 paths.push(filePath);
 
                 if (
-                  ['image', 'logo', 'lostImage', 'shippingLabel'].includes(
+                  ['image', 'images', 'nidFront', 'nidBack', 'drivingLicense', 'criminalReport'].includes(
                     fieldName,
                   ) &&
                   file.mimetype.startsWith('image/')
@@ -142,7 +140,7 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
                   try {
                     let sharpInstance = sharp(fullPath)
                       .rotate()
-                      .resize(800, null, { withoutEnlargement: true });
+                      .resize(1200, null, { withoutEnlargement: true });
 
                     if (file.mimetype === 'image/png') {
                       sharpInstance = sharpInstance.png({ quality: 80 });
@@ -167,16 +165,20 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
           }),
         );
 
+        const driverInfo: Record<string, any> = {
+          ...(req.body.driverInfo || {}),
+          ...(processedFiles.nidFront && { nidFront: processedFiles.nidFront }),
+          ...(processedFiles.nidBack && { nidBack: processedFiles.nidBack }),
+          ...(processedFiles.drivingLicense && { drivingLicense: processedFiles.drivingLicense }),
+          ...(processedFiles.criminalReport && { criminalReport: processedFiles.criminalReport }),
+        };
+
         req.body = {
           ...req.body,
-          ...(processedFiles.logo && { logo: processedFiles.logo }),
           ...(processedFiles.image && { image: processedFiles.image }),
-          ...(processedFiles.shippingLabel && {
-            shippingLabel: processedFiles.shippingLabel,
-          }),
-          ...(processedFiles.lostImage && {
-            images: processedFiles.lostImage,
-          }),
+          ...(processedFiles.files && { files: processedFiles.files }),
+          ...(processedFiles.images && { images: processedFiles.images }),
+          ...(Object.keys(driverInfo).length > 0 && { driverInfo }),
         };
 
         next();

@@ -76,6 +76,17 @@ const deleteMyAccount = catchAsync(async (req: Request, res: Response) => {
 
 
 
+const approveDriverProfile = catchAsync(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const result = await UserServices.approveDriverProfile(id, req.body);
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: `Driver profile status updated to ${req.body.status} successfully`,
+    data: result,
+  });
+});
+
 export const UserController = {
   getAllUser,
   updateProfile,
@@ -83,5 +94,5 @@ export const UserController = {
   deleteUser,
   getProfile,
   deleteMyAccount,
- 
+  approveDriverProfile,
 }

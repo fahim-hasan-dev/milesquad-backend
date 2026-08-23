@@ -9,6 +9,7 @@ const router = express.Router();
 
 router.post(
   '/',
+  auth(ADMIN_ROLES.SUPER_ADMIN,ADMIN_ROLES.SUB_ADMIN),
   validateRequest(PublicValidation.create),
   PublicController.createPublic,
 );

@@ -30,7 +30,6 @@ export type IUser = {
     address?: string;
     location?: [number, number];
     authentication: IAuthentication;
-    deviceToken?: string;
     fcmToken?: string[];
     driverInfo?: {
         vehicleType?: VEHICLE_TYPE;

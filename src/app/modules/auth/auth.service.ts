@@ -2,7 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import { IAuthResponse } from './auth.interface';
 import { User } from '../user/user.model';
 import ApiError from '../../../errors/ApiError';
-import { USER_ROLES, USER_STATUS } from '../../../enum/user';
+import { PROFILE_VERIFICATION_STATUS, USER_ROLES, USER_STATUS } from '../../../enum/user';
 import { AuthHelper } from './auth.helper';
 import { AuthCommonServices, authResponse } from './loginService';
 import { ILoginData } from '../../../interfaces/auth';
@@ -43,7 +43,19 @@ export const createUser = async (payload: IUser) => {
     wrongLoginAttempts: 0,
   };
 
-  if (payload.role !== USER_ROLES.DRIVER) {
+  if (payload.role === USER_ROLES.DRIVER) {
+    payload.driverInfo = {
+      vehicleType: payload.driverInfo?.vehicleType,
+      nidFront: payload.driverInfo?.nidFront || '',
+      nidBack: payload.driverInfo?.nidBack || '',
+      drivingLicense: payload.driverInfo?.drivingLicense || '',
+      criminalReport: payload.driverInfo?.criminalReport || '',
+      profileVerification: PROFILE_VERIFICATION_STATUS.PENDING,
+      rejectReason: '',
+      totalRating: 0,
+      averageRating: 0,
+    };
+  } else {
     delete payload.driverInfo;
   }
 

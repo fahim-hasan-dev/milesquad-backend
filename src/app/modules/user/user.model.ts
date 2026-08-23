@@ -88,10 +88,6 @@ const UserSchema = new Schema<IUser, UserModel>(
                 enum: ['createAccount', 'resetPassword'],
             },
         },
-        deviceToken: {
-            type: String,
-            default: "",
-        },
         fcmToken: {
             type: [String],
             default: [],
