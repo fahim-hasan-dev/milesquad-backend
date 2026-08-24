@@ -14,6 +14,7 @@ type IFolderName =
   | 'nidBack'
   | 'drivingLicense'
   | 'criminalReport'
+  | 'pdfDocument'
 
 interface ProcessedFiles {
   [key: string]: string | string[] | undefined
@@ -27,6 +28,7 @@ const uploadFields = [
   { name: 'nidBack', maxCount: 1 },
   { name: 'drivingLicense', maxCount: 1 },
   { name: 'criminalReport', maxCount: 1 },
+  { name: 'pdfDocument', maxCount: 1 },
 ] as const
 
 export const fileAndBodyProcessorUsingDiskStorage = () => {
@@ -67,6 +69,7 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
         nidBack: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'],
         drivingLicense: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'],
         criminalReport: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'],
+        pdfDocument: ['application/pdf'],
       };
 
       const fieldType = file.fieldname as IFolderName;
@@ -178,6 +181,7 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
           ...(processedFiles.image && { image: processedFiles.image }),
           ...(processedFiles.files && { files: processedFiles.files }),
           ...(processedFiles.images && { images: processedFiles.images }),
+          ...(processedFiles.pdfDocument && { pdfDocument: processedFiles.pdfDocument }),
           ...(Object.keys(driverInfo).length > 0 && { driverInfo }),
         };
 

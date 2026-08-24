@@ -1,17 +1,29 @@
 import config from '../config'
 import { ICreateAccount, IResetPassword } from '../interfaces/emailTemplate'
 
+const getHeaderLogo = () => {
+  if (config.logo_url) {
+    return `
+    <tr>
+      <td style="padding:30px 45px 10px 45px; text-align:center;">
+        <img src="${config.logo_url}" alt="Milesquad Logo" style="max-height:60px; max-width:200px; width:auto; height:auto; display:inline-block; object-fit:contain;" />
+      </td>
+    </tr>`;
+  }
+  return '';
+};
+
 const createAccount = (values: ICreateAccount) => {
   console.log(values, 'values')
   const data = {
     to: values.email,
-    subject: `Verify your Template account, ${values.name}`,
+    subject: `Verify your Milesquad account, ${values.name}`,
     html: `
 <body style="margin:0; padding:0; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0"
          style="max-width:640px; margin:40px auto; background-color:#ffffff; border-radius:14px;
                 overflow:hidden; box-shadow:0 5px 25px rgba(0,0,0,0.08);">
-    
+    ${getHeaderLogo()}
     <!-- Body -->
     <tr>
       <td style="padding:45px;">
@@ -86,7 +98,7 @@ const resetPassword = (values: IResetPassword) => {
   <table width="100%" cellpadding="0" cellspacing="0"
          style="max-width:640px; margin:40px auto; background-color:#ffffff; border-radius:14px;
                 overflow:hidden; box-shadow:0 5px 25px rgba(0,0,0,0.08);">
-    
+    ${getHeaderLogo()}
     <!-- Body -->
     <tr>
       <td style="padding:45px;">
@@ -259,7 +271,7 @@ const adminContactNotificationEmail = (payload: {
   <table width="100%" cellpadding="0" cellspacing="0"
          style="max-width:640px; margin:40px auto; background-color:#ffffff; border-radius:14px;
                 overflow:hidden; box-shadow:0 5px 25px rgba(0,0,0,0.08);">
-
+    ${getHeaderLogo()}
     <!-- Body -->
     <tr>
       <td style="padding:45px;">
@@ -341,7 +353,7 @@ const userContactConfirmationEmail = (payload: {
   <table width="100%" cellpadding="0" cellspacing="0"
          style="max-width:640px; margin:40px auto; background-color:#ffffff; border-radius:14px;
                 overflow:hidden; box-shadow:0 5px 25px rgba(0,0,0,0.08);">
-
+    ${getHeaderLogo()}
     <!-- Body -->
     <tr>
       <td style="padding:45px;">
@@ -438,6 +450,7 @@ const sendMagicLink = (values: { email: string; name: string; url: string }) => 
   <table width="100%" cellpadding="0" cellspacing="0"
          style="max-width:640px; margin:40px auto; background-color:#ffffff; border-radius:14px;
                 overflow:hidden; box-shadow:0 5px 25px rgba(0,0,0,0.08);">
+    ${getHeaderLogo()}
     <tr>
       <td style="padding:45px;">
         <h1 style="color:#0096FF; font-size:26px; font-weight:700; margin-bottom:15px; text-align:center;">

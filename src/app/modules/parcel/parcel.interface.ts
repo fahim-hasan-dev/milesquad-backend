@@ -38,44 +38,30 @@ export type IParcel = {
     vehicleType: VEHICLE_TYPE;
     images?: string[];
     pdfDocument?: string;
-
-    // Google Maps Route Info
     distance: number;
     duration: string;
-
-    // Measurement & Factors
     volume: number;
     volumeUtilization: number;
     weightUtilization: number;
     effectiveUtilization: number;
     loadFactor: number;
-
-    // Costs
     baseFee: number;
     baseFare: number;
     fuelCost: number;
     timeCost: number;
     goodRisks: number;
-
-    // Driver App Breakdown
     totalPrice: number;
     additionalCost: number;
     totalRun: number;
     driverShare: number;
-
-    // Admin Panel Breakdown
     overhead: number;
     milesquadInsurance: number;
     marginMilesquad: number;
     platformCommission: number;
-
-    // Customer App Breakdown
     totalOfRun: number;
     serviceFee: number;
     totalToPay: number;
     totalDeliveryFee: number;
-
-    // Payment & Delivery Details
     paymentId?: string;
     paymentMethod?: PAYMENT_METHOD;
     sender: Types.ObjectId;

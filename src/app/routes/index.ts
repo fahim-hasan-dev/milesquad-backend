@@ -15,6 +15,7 @@ import { SettingRoutes } from '../modules/setting/setting.route';
 import { AdminStatsRoutes } from '../modules/adminStats/adminStats.routes';
 import { DriverStatsRoutes } from '../modules/driverStats/driverStats.route';
 import { PartnerRoutes } from '../modules/partner/partner.route';
+import { TransactionRoutes } from '../modules/transaction/transaction.route';
 
 const router = express.Router();
 
@@ -34,6 +35,7 @@ const apiRoutes = [
     { path: "/admin-stats", route: AdminStatsRoutes },
     { path: "/driver-stats", route: DriverStatsRoutes },
     { path: "/partner", route: PartnerRoutes },
+    { path: "/transaction", route: TransactionRoutes },
 ];
 
 router.post('/webhook', handleStripeWebhook);

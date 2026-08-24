@@ -41,6 +41,7 @@ export default {
     },
     frontend_url: process.env.FRONTEND_URL,
     backend_url: process.env.BACKEND_URL,
+    logo_url: process.env.LOGO_URL,
     stripe: {
         stripeSecretKey: process.env.STRIPE_API_SECRET,
         webhookSecret: process.env.WEBHOOK_SECRET,

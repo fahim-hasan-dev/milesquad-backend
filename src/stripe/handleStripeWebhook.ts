@@ -8,6 +8,8 @@ import { logger } from '../shared/logger'
 import { Payment } from '../app/modules/payment/payment.model'
 import { Parcel } from '../app/modules/parcel/parcel.model'
 import { PARCEL_STATUS } from '../enum/parcel'
+import { Transaction } from '../app/modules/transaction/transaction.model'
+import { TRANSACTION_STATUS, TRANSACTION_TYPE } from '../enum/transaction'
 
 const handleStripeWebhook = async (req: Request, res: Response) => {
     console.log('hit stripe webhook')
@@ -58,6 +60,21 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
                                     'statusProgress.PENDING': true,
                                 }
                             });
+
+                            try {
+                                await Transaction.create({
+                                    transactionId: session.payment_intent as string || session.id,
+                                    user: parcel.sender,
+                                    parcel: parcel._id,
+                                    amount: (session.amount_total || 0) / 100,
+                                    type: TRANSACTION_TYPE.PAYMENT,
+                                    status: TRANSACTION_STATUS.COMPLETED,
+                                    paymentMethod: 'online',
+                                    description: `Online payment for Parcel #${parcel._id}`,
+                                });
+                            } catch (txnError) {
+                                logger.error('Failed to log payment transaction:', txnError);
+                            }
                         }
                     }
                 }

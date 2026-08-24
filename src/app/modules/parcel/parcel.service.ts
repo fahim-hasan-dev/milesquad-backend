@@ -21,6 +21,9 @@ import { calculateParcelPricing } from "../../../utils/pricingCalculator.util";
 import { User } from "../user/user.model";
 import { Partner } from "../partner/partner.model";
 import { emailHelper } from "../../../helpers/emailHelper";
+import { Transaction } from "../transaction/transaction.model";
+import { TRANSACTION_STATUS, TRANSACTION_TYPE } from "../../../enum/transaction";
+import config from "../../../config";
 
 const updateStatusProgress = (
     currentProgress: Partial<IStatusProgress> = {},
@@ -629,6 +632,21 @@ const updateParcel = async (
                 await User.findByIdAndUpdate(parcel.driver, {
                     $inc: { 'driverInfo.wallet': driverPayout },
                 });
+
+                try {
+                    await Transaction.create({
+                        transactionId: `WCR-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+                        user: parcel.driver,
+                        parcel: parcel._id,
+                        amount: driverPayout,
+                        type: TRANSACTION_TYPE.WALLET_CREDIT,
+                        status: TRANSACTION_STATUS.COMPLETED,
+                        paymentMethod: parcel.paymentMethod,
+                        description: `Wallet credit for delivering Parcel #${parcel._id}`,
+                    });
+                } catch (txnErr) {
+                    console.log("Failed to log wallet credit transaction:", txnErr);
+                }
             }
         }
 
@@ -836,8 +854,9 @@ const assignParcelByAdmin = async (
                 to: assigneeUser.email,
                 subject: "New Parcel Delivery Assigned - Milesquad",
                 html: `
-                  <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-                    <h2 style="color: #2ecc71;">New Parcel Delivery Assignment</h2>
+                  <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+                    ${config.logo_url ? `<div style="text-align: center; margin-bottom: 20px;"><img src="${config.logo_url}" alt="Milesquad Logo" style="max-height: 60px; max-width: 200px; width: auto; height: auto; display: inline-block; object-fit: contain;" /></div>` : ''}
+                    <h2 style="color: #2ecc71; text-align: center; margin-top: 0;">New Parcel Delivery Assignment</h2>
                     <p>Dear <strong>${assigneeUser.fullName}</strong>,</p>
                     <p>You have been assigned a new parcel delivery order by the Milesquad Admin team.</p>
                     <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #2ecc71;">

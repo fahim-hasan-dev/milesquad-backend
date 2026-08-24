@@ -55,15 +55,49 @@ const createSubAdmin = async (payload: Partial<IAdmin>) => {
         throw new ApiError(StatusCodes.BAD_REQUEST, 'An admin account with this email already exists');
     }
 
+    const rawPassword = payload.password;
+
     payload.role = ADMIN_ROLES.SUB_ADMIN;
     payload.status = USER_STATUS.ACTIVE;
 
     const result = await Admin.create(payload);
+
+    // Send email with login credentials to the new Sub Admin
+    if (result.email && rawPassword) {
+        const subject = 'Your Admin Account Credentials - MileSquad';
+        const html = `
+          <div style="font-family: Arial, sans-serif; padding: 24px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+            ${config.logo_url ? `<div style="text-align: center; margin-bottom: 20px;"><img src="${config.logo_url}" alt="Milesquad Logo" style="max-height: 60px; max-width: 200px; width: auto; height: auto; display: inline-block; object-fit: contain;" /></div>` : ''}
+            <h2 style="color: #10B981; margin-top: 0; text-align: center;">Welcome to MileSquad Admin Portal</h2>
+            <p>Hello <strong>${result.fullName || 'Admin'}</strong>,</p>
+            <p>An administrator account has been created for you on the MileSquad Dashboard. Below are your account login credentials:</p>
+            <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #cbd5e1;">
+              <p style="margin: 6px 0; font-size: 14px;"><strong>Email:</strong> ${result.email}</p>
+              <p style="margin: 6px 0; font-size: 14px;"><strong>Password:</strong> ${rawPassword}</p>
+            </div>
+            <p style="font-size: 13px; color: #64748b;">Please keep these credentials safe and log into your account.</p>
+            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+            <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">Best regards,<br/><strong>MileSquad Team</strong></p>
+          </div>
+        `;
+
+       setTimeout(()=>{
+            emailHelper.sendEmail({
+                to: result.email,
+                subject,
+                html,
+            });
+       },0)
+    }
+
     return result;
 };
 
 const getAllAdmins = async (query: Record<string, unknown>) => {
-    const adminQueryBuilder = new QueryBuilder(Admin.find().select('-password -authentication'), query)
+    const adminQueryBuilder = new QueryBuilder(
+        Admin.find({ role: ADMIN_ROLES.SUB_ADMIN }).select('-password -authentication'),
+        query
+    )
         .search(['fullName', 'email', 'phone'])
         .filter()
         .sort()

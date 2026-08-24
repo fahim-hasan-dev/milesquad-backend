@@ -16,7 +16,7 @@ router.get(
 router.patch(
     "/",
     validateRequest(SettingValidations.updateSettingZodSchema),
-    auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+    auth(ADMIN_ROLES.SUPER_ADMIN),
     SettingControllers.updateSettings
 );
 

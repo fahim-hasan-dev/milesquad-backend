@@ -154,6 +154,7 @@ const approveDriverProfile = async (
             $set: {
                 'driverInfo.profileVerification': payload.status,
                 'driverInfo.rejectReason': payload.status === PROFILE_VERIFICATION_STATUS.REJECTED ? (payload.rejectReason || '') : '',
+                ...(payload.status === PROFILE_VERIFICATION_STATUS.APPROVED ? { status: USER_STATUS.ACTIVE } : {}),
             },
         },
         { new: true }
