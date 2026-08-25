@@ -7,6 +7,8 @@ import { JwtPayload } from 'jsonwebtoken'
 import { StatusCodes } from 'http-status-codes'
 import ApiError from '../../../errors/ApiError'
 import mongoose from 'mongoose'
+import { NotificationService } from '../notification/notification.service'
+import { USER_ROLES } from '../../../enum/user'
 
 const createReview = async (user: JwtPayload, payload: Partial<IReview> & { parcelId: string }) => {
   if (!payload.parcelId) {
@@ -28,8 +30,6 @@ const createReview = async (user: JwtPayload, payload: Partial<IReview> & { parc
   payload.parcel = parcel._id
 
   const result = await Review.create(payload)
-
-  await Parcel.findByIdAndUpdate(parcel._id, { isReviewed: true })
 
   const driverId = new mongoose.Types.ObjectId(String(payload.driver))
 
@@ -53,17 +53,30 @@ const createReview = async (user: JwtPayload, payload: Partial<IReview> & { parc
     })
   }
 
+  try {
+    await NotificationService.insertNotification({
+      receiver: driverId,
+      title: "New Review Received",
+      message: `You received a ${payload.rating || 5}-star review for parcel delivery!`,
+      screen: "PROFILE",
+      type: USER_ROLES.DRIVER,
+    })
+  } catch (err) {
+    console.log("Failed to send review notification to driver:", err)
+  }
+
   return result
 }
 
 const getAllReviews = async (query: Record<string, unknown>) => {
-  const reviewQueryBuilder = new QueryBuilder(Review.find().populate('sender', 'fullName image'), query)
+  const reviewQueryBuilder = new QueryBuilder(Review.find().populate('sender', 'userId fullName image'), query)
+    .search(["reviewId", "comment"])
     .filter()
     .sort()
     .fields()
     .paginate()
 
-  reviewQueryBuilder.modelQuery.select("rating comment sender createdAt").lean()
+  reviewQueryBuilder.modelQuery.select("reviewId rating comment sender createdAt").lean()
 
   const reviews = await reviewQueryBuilder.modelQuery
   const paginationInfo = await reviewQueryBuilder.getPaginationInfo()

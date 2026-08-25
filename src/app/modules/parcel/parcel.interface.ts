@@ -76,5 +76,5 @@ export type IParcel = {
     pickedUpAt?: Date;
     deliveredAt?: Date;
     deliveryProof?: string[];
-    isReviewed?: boolean;
+    parcelId?: string;
 };

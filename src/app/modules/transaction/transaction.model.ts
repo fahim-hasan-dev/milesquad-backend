@@ -1,6 +1,7 @@
 import { Schema, model } from "mongoose";
 import { ITransaction, TransactionModel } from "./transaction.interface";
 import { TRANSACTION_STATUS, TRANSACTION_TYPE } from "../../../enum/transaction";
+import { getNextCustomId } from "../counter/counter.model";
 
 const TransactionSchema = new Schema<ITransaction, TransactionModel>(
     {
@@ -60,5 +61,12 @@ const TransactionSchema = new Schema<ITransaction, TransactionModel>(
         },
     }
 );
+
+TransactionSchema.pre("validate", async function (next) {
+    if (!this.transactionId) {
+        this.transactionId = await getNextCustomId("TXN");
+    }
+    next();
+});
 
 export const Transaction = model<ITransaction, TransactionModel>("Transaction", TransactionSchema);

@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiError';
 import { IUser } from './user.interface';
@@ -10,7 +11,7 @@ import { NotificationService } from '../notification/notification.service';
 
 const getAllUser = async (query: Record<string, unknown>) => {
     const userQueryBuilder = new QueryBuilder(User.find().select('-password -authentication'), query)
-        .search(['fullName', 'phone'])
+        .search(['fullName', 'phone', 'email', 'userId'])
         .filter()
         .sort()
         .fields()
@@ -35,7 +36,10 @@ const getAllUser = async (query: Record<string, unknown>) => {
 };
 
 const getSingleUser = async (id: string) => {
-    const user: any = await User.findById(id).select('-password -authentication').lean();
+    const isObjectId = Types.ObjectId.isValid(id);
+    const queryFilter = isObjectId ? { _id: id } : { userId: id };
+
+    const user: any = await User.findOne(queryFilter).select('-password -authentication').lean();
     if (!user) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
     }

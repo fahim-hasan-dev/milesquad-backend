@@ -20,6 +20,7 @@ export type IUser = {
     _id: Types.ObjectId;
     fullName: string;
     phone: string;
+    userId?: string;
     email?: string;
     isEmailVerified?: boolean;
     password: string;

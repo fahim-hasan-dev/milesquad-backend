@@ -1,6 +1,7 @@
 import { Model } from "mongoose";
 
 export interface IPartner {
+    partnerId?: string;
     fullName: string;
     rolePosition: string;
     email: string;

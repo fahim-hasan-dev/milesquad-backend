@@ -8,9 +8,11 @@ import { User } from "../user/user.model";
 import { USER_ROLES } from "../../../enum/user";
 import { NotificationService } from "../notification/notification.service";
 
+import { getNextCustomId } from "../counter/counter.model";
+
 const createTransaction = async (payload: Partial<ITransaction>) => {
     if (!payload.transactionId) {
-        payload.transactionId = `TXN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+        payload.transactionId = await getNextCustomId("TXN");
     }
     const transaction = await Transaction.create(payload);
     return transaction;
@@ -40,7 +42,7 @@ const getAllTransactions = async (query: Record<string, unknown>) => {
     const transactionQuery = new QueryBuilder(
         Transaction.find().populate({
             path: "user parcel",
-            select: "fullName phone email role goodType totalDeliveryFee"
+            select: "userId parcelId fullName phone email role goodType totalDeliveryFee"
         }),
         query
     )

@@ -1,8 +1,14 @@
 import { Schema, model } from "mongoose";
 import { IPartner, PartnerModel } from "./partner.interface";
+import { getNextCustomId } from "../counter/counter.model";
 
 const PartnerSchema = new Schema<IPartner, PartnerModel>(
     {
+        partnerId: {
+            type: String,
+            unique: true,
+            sparse: true,
+        },
         fullName: {
             type: String,
             required: true,
@@ -39,5 +45,12 @@ const PartnerSchema = new Schema<IPartner, PartnerModel>(
         },
     }
 );
+
+PartnerSchema.pre("save", async function (next) {
+    if (!this.partnerId) {
+        this.partnerId = await getNextCustomId("PTR");
+    }
+    next();
+});
 
 export const Partner = model<IPartner, PartnerModel>("Partner", PartnerSchema);

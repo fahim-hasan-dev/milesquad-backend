@@ -1,7 +1,13 @@
 import mongoose, { Schema } from "mongoose"
 import { IReview } from "./review.interface"
+import { getNextCustomId } from "../counter/counter.model"
 
 const ReviewSchema = new mongoose.Schema<IReview>({
+  reviewId: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
   driver: {
     type: Schema.Types.ObjectId,
     ref: 'User',
@@ -26,6 +32,13 @@ const ReviewSchema = new mongoose.Schema<IReview>({
   },
 }, {
   timestamps: true,
+})
+
+ReviewSchema.pre("save", async function (next) {
+  if (!this.reviewId) {
+    this.reviewId = await getNextCustomId("REV")
+  }
+  next()
 })
 
 export const Review = mongoose.model<IReview>('Review', ReviewSchema)

@@ -297,17 +297,17 @@ const selectPaymentMethod = async (
 };
 
 const getAllParcels = async (query: Record<string, unknown>) => {
-    const defaultFields = "goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
+    const defaultFields = "parcelId goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
     const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
 
     const parcelQuery = new QueryBuilder(
         Parcel.find({ status: { $ne: PARCEL_STATUS.CREATED } }).populate([
-            { path: "sender driver", select: "fullName phone image" },
-            { path: "partner", select: "fullName phone rolePosition email" }
+            { path: "sender driver", select: "userId fullName phone image" },
+            { path: "partner", select: "partnerId fullName phone rolePosition email" }
         ]),
         query
     )
-        .search(["goodType", "receiverPhone"])
+        .search(["goodType", "receiverPhone", "parcelId"])
         .filter()
         .sort()
         .paginate();
@@ -329,18 +329,18 @@ const getMyParcels = async (
         ? { driver: userId, status: { $ne: PARCEL_STATUS.CREATED } }
         : { sender: userId, status: { $ne: PARCEL_STATUS.CREATED } };
 
-    const defaultFields = "goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
+    const defaultFields = "parcelId goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
     const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
 
     const parcelQuery = new QueryBuilder(
         Parcel.find(filter).populate([
-            { path: "sender driver", select: "fullName phone image driverInfo.averageRating driverInfo.totalRating" },
-            { path: "partner", select: "fullName phone rolePosition email" }
+            { path: "sender driver", select: "userId fullName phone image driverInfo.averageRating driverInfo.totalRating" },
+            { path: "partner", select: "partnerId fullName phone rolePosition email" }
         ]),
         query
     )
         .filter()
-        .search(["goodType", "receiverPhone", "_id"])
+        .search(["goodType", "receiverPhone", "_id", "parcelId"])
         .sort()
         .paginate();
 
@@ -514,16 +514,22 @@ const acceptParcel = async (parcelId: string, driverId: string) => {
 };
 
 const getSingleParcel = async (id: string, user?: JwtPayload) => {
-    const parcel = await Parcel.findOne({ _id: id, status: { $ne: PARCEL_STATUS.CREATED } }).populate("sender driver partner");
+    const isObjectId = Types.ObjectId.isValid(id);
+    const queryFilter = isObjectId ? { _id: id } : { parcelId: id };
+
+    const parcel = await Parcel.findOne({
+        ...queryFilter,
+        status: { $ne: PARCEL_STATUS.CREATED },
+    }).populate("sender driver partner");
 
     if (!parcel) {
         throw new ApiError(StatusCodes.NOT_FOUND, "Parcel not found");
     }
 
-    const review = await Review.findOne({ parcel: id });
+    const review = await Review.findOne({ parcel: parcel._id });
     const parcelObj = parcel.toObject() as any;
 
-    const liveLocation = await trackingService.getDriverLocation(id);
+    const liveLocation = await trackingService.getDriverLocation(parcel._id.toString());
 
     if (liveLocation) {
         parcelObj.driverLocation = {
@@ -1037,14 +1043,14 @@ const getCurrentActiveParcel = async (userId: string, role: string) => {
         : { sender: userId };
 
     const selectedFields =
-        "_id goodType numberOfGoods vehicleType status isDriverAssigned " +
+        "_id parcelId goodType numberOfGoods vehicleType status isDriverAssigned " +
         "pickupLocation dropLocation receiverPhone deliveryDate pickedUpAt deliveredAt " +
         "totalToPay totalDeliveryFee paymentMethod sender driver partner statusProgress createdAt";
 
     const populateOptions = [
-        { path: "sender", select: "fullName phone email image" },
-        { path: "driver", select: "fullName phone image driverInfo.vehicleType driverInfo.vehicleModel driverInfo.licensePlate driverInfo.averageRating" },
-        { path: "partner", select: "fullName phone email rolePosition" },
+        { path: "sender", select: "userId fullName phone email image" },
+        { path: "driver", select: "userId fullName phone image driverInfo.vehicleType driverInfo.vehicleModel driverInfo.licensePlate driverInfo.averageRating" },
+        { path: "partner", select: "partnerId fullName phone email rolePosition" },
     ];
 
     let activeParcel = await Parcel.findOne({

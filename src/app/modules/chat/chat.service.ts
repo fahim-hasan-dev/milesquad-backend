@@ -29,7 +29,7 @@ const createChatToDB = async (payload: {
     const populatedChat = await Chat.findById(chat._id)
         .populate({
             path: 'participants',
-            select: '_id fullName image role email',
+            select: '_id userId fullName image role email',
         })
         .populate({
             path: 'lastMessage',
@@ -76,7 +76,7 @@ const getChatFromDB = async (
     const chats = await chatQueryBuilder.modelQuery
         .populate({
             path: 'participants',
-            select: '_id fullName image role email',
+            select: '_id userId fullName image role email',
             match: { _id: { $ne: user.authId } }
         })
         .populate({
@@ -160,7 +160,7 @@ const getSingleChatFromDB = async (chatId: string, user: JwtPayload): Promise<an
     const chat = await Chat.findById(chatId)
         .populate({
             path: 'participants',
-            select: '_id fullName image role email',
+            select: '_id userId fullName image role email',
             match: { _id: { $ne: userIdStr } }
         })
         .populate({

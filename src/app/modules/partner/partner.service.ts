@@ -1,3 +1,4 @@
+import { Types } from "mongoose";
 import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../errors/ApiError";
 import QueryBuilder from "../../builder/QueryBuilder";
@@ -24,7 +25,7 @@ const getAllPartners = async (query: Record<string, unknown>) => {
         Partner.find({ status: { $ne: 'deleted' } }),
         query
     )
-        .search(["fullName", "email", "phone", "rolePosition"])
+        .search(["fullName", "email", "phone", "rolePosition", "partnerId"])
         .filter()
         .sort()
         .paginate()
@@ -40,7 +41,10 @@ const getAllPartners = async (query: Record<string, unknown>) => {
 };
 
 const getSinglePartner = async (id: string) => {
-    const partner = await Partner.findOne({ _id: id, status: { $ne: 'deleted' } });
+    const isObjectId = Types.ObjectId.isValid(id);
+    const queryFilter = isObjectId ? { _id: id } : { partnerId: id };
+
+    const partner = await Partner.findOne({ ...queryFilter, status: { $ne: 'deleted' } });
     if (!partner) {
         throw new ApiError(StatusCodes.NOT_FOUND, "Partner not found.");
     }

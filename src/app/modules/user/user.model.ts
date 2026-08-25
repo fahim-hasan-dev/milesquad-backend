@@ -7,11 +7,18 @@ import { StatusCodes } from "http-status-codes";
 import ApiError from "../../../errors/ApiError";
 import config from "../../../config";
 
+import { getNextCustomId } from "../counter/counter.model";
+
 const UserSchema = new Schema<IUser, UserModel>(
     {
         fullName: {
             type: String,
             required: true,
+        },
+        userId: {
+            type: String,
+            unique: true,
+            sparse: true,
         },
         phone: {
             type: String,
@@ -147,6 +154,11 @@ UserSchema.pre("save", async function (next) {
                 );
             }
         }
+        if (!this.userId) {
+            const prefix = this.role === USER_ROLES.DRIVER ? "DRV" : (this.role === USER_ROLES.CUSTOMER ? "CUS" : "ADM");
+            this.userId = await getNextCustomId(prefix);
+        }
+
         if (this.isModified("password")) {
             this.password = await bcrypt.hash(
                 this.password,

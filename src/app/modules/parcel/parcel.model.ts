@@ -1,9 +1,15 @@
 import mongoose, { Schema } from "mongoose";
 import { IParcel } from "./parcel.interface";
 import { PARCEL_STATUS, VEHICLE_TYPE, PAYMENT_METHOD } from "../../../enum/parcel";
+import { getNextCustomId } from "../counter/counter.model";
 
 const ParcelSchema = new Schema<IParcel>(
     {
+        parcelId: {
+            type: String,
+            unique: true,
+            sparse: true,
+        },
         sameDayPickup: {
             type: Boolean,
             default: false,
@@ -149,13 +155,19 @@ const ParcelSchema = new Schema<IParcel>(
         pickedUpAt: { type: Date },
         deliveredAt: { type: Date },
         deliveryProof: [{ type: String }],
-        isReviewed: { type: Boolean, default: false },
     },
     {
         timestamps: true,
         toJSON: { virtuals: true },
     }
 );
+
+ParcelSchema.pre("save", async function (next) {
+    if (!this.parcelId) {
+        this.parcelId = await getNextCustomId("PAR");
+    }
+    next();
+});
 
 ParcelSchema.index({ "pickupLocation.coordinates": "2dsphere" });
 ParcelSchema.index({ sender: 1, status: 1 });
