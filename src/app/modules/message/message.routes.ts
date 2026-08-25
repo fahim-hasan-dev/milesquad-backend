@@ -30,12 +30,6 @@ router.get(
   MessageController.getUnreadCount
 );
 
-router.patch(
-  '/:messageId/money-request',
-  auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER),
-  MessageController.updateMoneyRequestStatus
-);
-
 router.delete(
   '/:id',
   auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),

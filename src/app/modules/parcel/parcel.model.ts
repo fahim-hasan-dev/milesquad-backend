@@ -148,6 +148,8 @@ const ParcelSchema = new Schema<IParcel>(
         },
         pickedUpAt: { type: Date },
         deliveredAt: { type: Date },
+        deliveryProof: [{ type: String }],
+        isReviewed: { type: Boolean, default: false },
     },
     {
         timestamps: true,

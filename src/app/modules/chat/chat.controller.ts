@@ -31,8 +31,22 @@ const getChat = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getSingleChat = catchAsync(async (req: Request, res: Response) => {
+    const result = await ChatService.getSingleChatFromDB(
+        req.params.id,
+        req.user as JwtPayload
+    );
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: 'Chat Details Retrieved Successfully',
+        data: result,
+    });
+});
+
 const deleteChat = catchAsync(async (req: Request, res: Response) => {
-    await ChatService.deleteChatFromDB(req.params.id, req.user.id);
+    await ChatService.deleteChatFromDB(req.params.id, req.user.authId);
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
@@ -45,5 +59,6 @@ const deleteChat = catchAsync(async (req: Request, res: Response) => {
 export const ChatController = {
     createChat,
     getChat,
+    getSingleChat,
     deleteChat
 };

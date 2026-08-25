@@ -67,6 +67,7 @@ const updateParcelSchema = z.object({
         note: z.string().optional(),
         packagePhotos: z.array(z.string()).optional(),
         pdfDocument: z.string().optional(),
+        deliveryProof: z.array(z.string()).optional(),
     }),
 });
 

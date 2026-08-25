@@ -163,6 +163,47 @@ const assignParcelByAdmin = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const downloadInvoice = catchAsync(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { format } = req.query;
+    const result = await ParcelServices.getParcelInvoice(id);
+
+    if (format === 'html') {
+        res.setHeader('Content-Type', 'text/html');
+        res.send(result.html);
+        return;
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${result.filename}`);
+    res.send(result.pdfBuffer);
+});
+
+const getAvailableDriversForParcel = catchAsync(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const result = await ParcelServices.getAvailableDriversForParcel(id);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: "Available drivers fetched successfully",
+        data: result,
+    });
+});
+
+const getCurrentActiveParcel = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user as JwtPayload;
+    const userId = user.authId || user.id;
+    const result = await ParcelServices.getCurrentActiveParcel(userId, user.role);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: result ? "Current active parcel fetched successfully" : "No active running parcel found",
+        data: result,
+    });
+});
+
 export const ParcelController = {
     createParcel,
     selectPaymentMethod,
@@ -176,4 +217,7 @@ export const ParcelController = {
     cancelParcel,
     deleteParcel,
     assignParcelByAdmin,
+    downloadInvoice,
+    getAvailableDriversForParcel,
+    getCurrentActiveParcel,
 };

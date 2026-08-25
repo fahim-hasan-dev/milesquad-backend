@@ -22,12 +22,14 @@ const createReview = async (user: JwtPayload, payload: Partial<IReview> & { parc
     throw new ApiError(StatusCodes.BAD_REQUEST, "This parcel was not assigned to any driver.")
   }
 
-  const userId = user.authId || user.id
+  const userId = user.authId
   payload.sender = new mongoose.Types.ObjectId(userId)
   payload.driver = parcel.driver
   payload.parcel = parcel._id
 
   const result = await Review.create(payload)
+
+  await Parcel.findByIdAndUpdate(parcel._id, { isReviewed: true })
 
   const driverId = new mongoose.Types.ObjectId(String(payload.driver))
 

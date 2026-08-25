@@ -75,4 +75,6 @@ export type IParcel = {
     note?: string;
     pickedUpAt?: Date;
     deliveredAt?: Date;
+    deliveryProof?: string[];
+    isReviewed?: boolean;
 };

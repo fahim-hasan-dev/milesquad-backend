@@ -10,6 +10,9 @@ import { Parcel } from '../app/modules/parcel/parcel.model'
 import { PARCEL_STATUS } from '../enum/parcel'
 import { Transaction } from '../app/modules/transaction/transaction.model'
 import { TRANSACTION_STATUS, TRANSACTION_TYPE } from '../enum/transaction'
+import { User } from '../app/modules/user/user.model'
+import { emailHelper } from '../helpers/emailHelper'
+import { generateInvoiceHTML, generateInvoicePDFBuffer } from '../helpers/invoiceHelper'
 
 const handleStripeWebhook = async (req: Request, res: Response) => {
     console.log('hit stripe webhook')
@@ -74,6 +77,32 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
                                 });
                             } catch (txnError) {
                                 logger.error('Failed to log payment transaction:', txnError);
+                            }
+
+                            // Send Online Paid Invoice Email to Customer if email exists
+                            try {
+                                const updatedParcel = await Parcel.findById(parcelId);
+                                const customer = await User.findById(parcel.sender);
+                                if (customer?.email && updatedParcel) {
+                                    const html = generateInvoiceHTML(updatedParcel, customer);
+                                    const pdfBuffer = await generateInvoicePDFBuffer(updatedParcel, customer);
+                                    const invoiceNo = `INV-${updatedParcel._id.toString().slice(-8).toUpperCase()}`;
+
+                                    await emailHelper.sendEmail({
+                                        to: customer.email,
+                                        subject: `Payment Successful & Invoice #${invoiceNo} - Milesquad`,
+                                        html,
+                                        attachments: [
+                                            {
+                                                filename: `${invoiceNo}.pdf`,
+                                                content: pdfBuffer,
+                                                contentType: 'application/pdf',
+                                            },
+                                        ],
+                                    });
+                                }
+                            } catch (mailErr) {
+                                logger.error("Failed to send online payment invoice email:", mailErr);
                             }
                         }
                     }

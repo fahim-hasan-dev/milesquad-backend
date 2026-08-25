@@ -15,7 +15,7 @@ import { redisClient } from "../../../helpers/redis";
 import { createPaymentSession } from "../../../stripe/createPaymentSession";
 import { JwtPayload } from "jsonwebtoken";
 import { NotificationService } from "../notification/notification.service";
-import { ADMIN_ROLES, USER_ROLES } from "../../../enum/user";
+import { ADMIN_ROLES, USER_ROLES, USER_STATUS } from "../../../enum/user";
 import { Review } from "../review/review.model";
 import { calculateParcelPricing } from "../../../utils/pricingCalculator.util";
 import { User } from "../user/user.model";
@@ -24,6 +24,7 @@ import { emailHelper } from "../../../helpers/emailHelper";
 import { Transaction } from "../transaction/transaction.model";
 import { TRANSACTION_STATUS, TRANSACTION_TYPE } from "../../../enum/transaction";
 import config from "../../../config";
+import { generateInvoiceHTML, generateInvoicePDFBuffer } from "../../../helpers/invoiceHelper";
 
 const updateStatusProgress = (
     currentProgress: Partial<IStatusProgress> = {},
@@ -259,6 +260,31 @@ const selectPaymentMethod = async (
         parcel.statusProgress = updateStatusProgress(parcel.statusProgress, PARCEL_STATUS.PENDING);
 
         const updatedParcel = await parcel.save();
+
+        // Send Invoice Email to Customer if email exists
+        try {
+            const customer = await User.findById(parcel.sender);
+            if (customer?.email) {
+                const html = generateInvoiceHTML(updatedParcel, customer);
+                const pdfBuffer = await generateInvoicePDFBuffer(updatedParcel, customer);
+                const invoiceNo = `INV-${updatedParcel._id.toString().slice(-8).toUpperCase()}`;
+
+                await emailHelper.sendEmail({
+                    to: customer.email,
+                    subject: `Booking Confirmation & Invoice #${invoiceNo} - Milesquad`,
+                    html,
+                    attachments: [
+                        {
+                            filename: `${invoiceNo}.pdf`,
+                            content: pdfBuffer,
+                            contentType: 'application/pdf',
+                        },
+                    ],
+                });
+            }
+        } catch (mailErr) {
+            console.error("Failed to send hand_cash invoice email:", mailErr);
+        }
 
         return {
             paymentMethod: PAYMENT_METHOD.HAND_CASH,
@@ -895,6 +921,153 @@ const assignParcelByAdmin = async (
     return updatedParcel;
 };
 
+const getParcelInvoice = async (parcelId: string) => {
+    const parcel = await Parcel.findById(parcelId).populate("sender driver partner");
+    if (!parcel) {
+        throw new ApiError(StatusCodes.NOT_FOUND, "Parcel not found");
+    }
+
+    const customer = await User.findById(parcel.sender);
+    const html = generateInvoiceHTML(parcel, customer);
+    const pdfBuffer = await generateInvoicePDFBuffer(parcel, customer);
+
+    return {
+        parcel,
+        customer,
+        html,
+        pdfBuffer,
+        filename: `Invoice-${parcel._id.toString().slice(-8).toUpperCase()}.pdf`,
+    };
+};
+
+const getAvailableDriversForParcel = async (parcelId: string) => {
+    const parcel = await Parcel.findById(parcelId);
+    if (!parcel) {
+        throw new ApiError(StatusCodes.NOT_FOUND, "Parcel not found");
+    }
+
+    const pickupCoords = parcel.pickupLocation?.coordinates;
+    if (!pickupCoords || pickupCoords.length < 2) {
+        throw new ApiError(StatusCodes.BAD_REQUEST, "Parcel pickup location coordinates missing");
+    }
+
+    const pickupLocation = {
+        lng: pickupCoords[0],
+        lat: pickupCoords[1],
+    };
+
+    const activeParcels = await Parcel.find({
+        isDriverAssigned: true,
+        driver: { $ne: null },
+        status: {
+            $in: [
+                PARCEL_STATUS.RIDER_ASSIGNED,
+                PARCEL_STATUS.ON_THE_WAY_TO_PICKUP,
+                PARCEL_STATUS.PICKED_UP,
+                PARCEL_STATUS.ON_THE_WAY_TO_DELIVERY,
+            ],
+        },
+    }).select("driver");
+
+    const busyDriverIds = activeParcels
+        .map((p) => p.driver?.toString())
+        .filter(Boolean);
+
+    const availableDrivers = await User.find({
+        role: USER_ROLES.DRIVER,
+        status: USER_STATUS.ACTIVE,
+        _id: { $nin: busyDriverIds },
+    }).select("fullName phone email image driverInfo status");
+
+    const driversWithDistance = await Promise.all(
+        availableDrivers.map(async (driver) => {
+            const driverObj = driver.toObject();
+
+            const liveLocation = await trackingService.getSingleDriverLocationById(driver._id.toString());
+            let driverLat: number | null = liveLocation?.lat ?? null;
+            let driverLng: number | null = liveLocation?.lng ?? null;
+
+            const driverInfoAny = driver.driverInfo as any;
+            if ((driverLat === null || driverLng === null) && driverInfoAny?.lastLocation?.coordinates) {
+                driverLng = driverInfoAny.lastLocation.coordinates[0];
+                driverLat = driverInfoAny.lastLocation.coordinates[1];
+            }
+
+            let distanceKm: number = 999999;
+            let distanceText = "Unknown";
+
+            if (driverLat !== null && driverLng !== null) {
+                const calculated = await getDistanceAndDuration(
+                    { lat: driverLat, lng: driverLng },
+                    { lat: pickupLocation.lat, lng: pickupLocation.lng }
+                );
+                distanceKm = calculated.distanceKm;
+                distanceText = `${calculated.distanceKm} km`;
+            }
+
+            return {
+                ...driverObj,
+                driverLocation: driverLat !== null && driverLng !== null ? { lat: driverLat, lng: driverLng } : null,
+                distanceKm,
+                distanceText,
+            };
+        })
+    );
+
+    driversWithDistance.sort((a, b) => a.distanceKm - b.distanceKm);
+
+    return {
+        parcelId: parcel._id,
+        pickupLocation: parcel.pickupLocation,
+        totalAvailableDrivers: driversWithDistance.length,
+        drivers: driversWithDistance,
+    };
+};
+
+const getCurrentActiveParcel = async (userId: string, role: string) => {
+    const runningStatuses = [
+        PARCEL_STATUS.RIDER_ASSIGNED,
+        PARCEL_STATUS.ON_THE_WAY_TO_PICKUP,
+        PARCEL_STATUS.PICKED_UP,
+        PARCEL_STATUS.ON_THE_WAY_TO_DELIVERY,
+    ];
+
+    const baseFilter = role === USER_ROLES.DRIVER
+        ? { driver: userId }
+        : { sender: userId };
+
+    const selectedFields =
+        "_id goodType numberOfGoods vehicleType status isDriverAssigned " +
+        "pickupLocation dropLocation receiverPhone deliveryDate pickedUpAt deliveredAt " +
+        "totalToPay totalDeliveryFee paymentMethod sender driver partner statusProgress createdAt";
+
+    const populateOptions = [
+        { path: "sender", select: "fullName phone email image" },
+        { path: "driver", select: "fullName phone image driverInfo.vehicleType driverInfo.vehicleModel driverInfo.licensePlate driverInfo.averageRating" },
+        { path: "partner", select: "fullName phone email rolePosition" },
+    ];
+
+    let activeParcel = await Parcel.findOne({
+        ...baseFilter,
+        status: { $in: runningStatuses },
+    })
+        .select(selectedFields)
+        .sort({ updatedAt: -1 })
+        .populate(populateOptions);
+
+    if (!activeParcel) {
+        activeParcel = await Parcel.findOne({
+            ...baseFilter,
+            status: { $nin: [PARCEL_STATUS.DELIVERED, PARCEL_STATUS.CANCELLED] },
+        })
+            .select(selectedFields)
+            .sort({ createdAt: -1 })
+            .populate(populateOptions);
+    }
+
+    return activeParcel;
+};
+
 export const ParcelServices = {
     createParcel,
     selectPaymentMethod,
@@ -908,4 +1081,7 @@ export const ParcelServices = {
     cancelParcel,
     deleteParcel,
     assignParcelByAdmin,
+    getParcelInvoice,
+    getAvailableDriversForParcel,
+    getCurrentActiveParcel,
 };

@@ -31,8 +31,26 @@ router.patch(
 );
 
 router.get(
+    "/:id/available-drivers",
+    auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+    ParcelController.getAvailableDriversForParcel
+);
+
+router.get(
     "/calculate-distance",
     ParcelController.calculateDistance
+);
+
+router.get(
+    "/invoice/:id",
+    auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+    ParcelController.downloadInvoice
+);
+
+router.get(
+    "/current-active",
+    auth(USER_ROLES.DRIVER, USER_ROLES.CUSTOMER),
+    ParcelController.getCurrentActiveParcel
 );
 
 router.get(

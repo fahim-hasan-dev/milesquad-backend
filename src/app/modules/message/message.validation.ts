@@ -5,12 +5,12 @@ export const sendMessageZod = z.object({
     body: z.object({
         chatId: z.string().min(1, 'Chat ID is required'),
         text: z.string().optional(),
-        image: z.string().optional(),
+        files: z.array(z.string()).optional(),
         type: z.nativeEnum(MESSAGE).optional(),
     }).refine(
-        (data) => data.text || data.image,
+        (data) => data.text || data.files,
         {
-            message: 'Either text or image must be provided',
+            message: 'Either text or files must be provided',
         }
     ),
 });

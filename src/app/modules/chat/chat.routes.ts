@@ -10,7 +10,7 @@ router.post(
   auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
   async (req, res, next) => {
     try {
-      const userId = req.user.authId || req.user.id;
+      const userId = req.user.authId;
       req.body = {
         participants: [userId, req.body.participant],
         isAdminSupport: false
@@ -27,6 +27,12 @@ router.get(
   "/",
   auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
   ChatController.getChat
+);
+
+router.get(
+  "/:id",
+  auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+  ChatController.getSingleChat
 );
 
 router.delete(

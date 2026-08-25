@@ -15,6 +15,7 @@ type IFolderName =
   | 'drivingLicense'
   | 'criminalReport'
   | 'pdfDocument'
+  | 'deliveryProof'
 
 interface ProcessedFiles {
   [key: string]: string | string[] | undefined
@@ -29,6 +30,7 @@ const uploadFields = [
   { name: 'drivingLicense', maxCount: 1 },
   { name: 'criminalReport', maxCount: 1 },
   { name: 'pdfDocument', maxCount: 1 },
+  { name: 'deliveryProof', maxCount: 5 },
 ] as const
 
 export const fileAndBodyProcessorUsingDiskStorage = () => {
@@ -70,6 +72,7 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
         drivingLicense: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'],
         criminalReport: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'],
         pdfDocument: ['application/pdf'],
+        deliveryProof: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'],
       };
 
       const fieldType = file.fieldname as IFolderName;
@@ -128,7 +131,7 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
                 paths.push(filePath);
 
                 if (
-                  ['image', 'images', 'nidFront', 'nidBack', 'drivingLicense', 'criminalReport'].includes(
+                  ['image', 'images', 'nidFront', 'nidBack', 'drivingLicense', 'criminalReport', 'deliveryProof'].includes(
                     fieldName,
                   ) &&
                   file.mimetype.startsWith('image/')
@@ -182,6 +185,7 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
           ...(processedFiles.files && { files: processedFiles.files }),
           ...(processedFiles.images && { images: processedFiles.images }),
           ...(processedFiles.pdfDocument && { pdfDocument: processedFiles.pdfDocument }),
+          ...(processedFiles.deliveryProof && { deliveryProof: Array.isArray(processedFiles.deliveryProof) ? processedFiles.deliveryProof : [processedFiles.deliveryProof] }),
           ...(Object.keys(driverInfo).length > 0 && { driverInfo }),
         };
 
