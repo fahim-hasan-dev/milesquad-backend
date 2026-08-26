@@ -300,14 +300,46 @@ const getAllParcels = async (query: Record<string, unknown>) => {
     const defaultFields = "parcelId goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
     const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
 
+    const extraOrConditions: any[] = [];
+    if (query.searchTerm && typeof query.searchTerm === "string" && query.searchTerm.trim()) {
+        const term = query.searchTerm.trim();
+        const searchRegex = { $regex: term, $options: "i" };
+
+        const matchingUsers = await User.find({
+            $or: [
+                { fullName: searchRegex },
+                { email: searchRegex },
+                { phone: searchRegex }
+            ]
+        }).select("_id");
+        const matchingUserIds = matchingUsers.map(u => u._id);
+
+        const matchingPartners = await Partner.find({
+            $or: [
+                { fullName: searchRegex },
+                { email: searchRegex },
+                { phone: searchRegex }
+            ]
+        }).select("_id");
+        const matchingPartnerIds = matchingPartners.map(p => p._id);
+
+        if (matchingUserIds.length > 0) {
+            extraOrConditions.push({ sender: { $in: matchingUserIds } });
+            extraOrConditions.push({ driver: { $in: matchingUserIds } });
+        }
+        if (matchingPartnerIds.length > 0) {
+            extraOrConditions.push({ partner: { $in: matchingPartnerIds } });
+        }
+    }
+
     const parcelQuery = new QueryBuilder(
-        Parcel.find({ status: { $ne: PARCEL_STATUS.CREATED } }).populate([
-            { path: "sender driver", select: "userId fullName phone image" },
+        Parcel.find().populate([
+            { path: "sender driver", select: "userId fullName phone email image" },
             { path: "partner", select: "partnerId fullName phone rolePosition email" }
         ]),
         query
     )
-        .search(["goodType", "receiverPhone", "parcelId"])
+        .search(["goodType", "receiverPhone", "parcelId"], extraOrConditions)
         .filter()
         .sort()
         .paginate();
@@ -517,10 +549,7 @@ const getSingleParcel = async (id: string, user?: JwtPayload) => {
     const isObjectId = Types.ObjectId.isValid(id);
     const queryFilter = isObjectId ? { _id: id } : { parcelId: id };
 
-    const parcel = await Parcel.findOne({
-        ...queryFilter,
-        status: { $ne: PARCEL_STATUS.CREATED },
-    }).populate("sender driver partner");
+    const parcel = await Parcel.findOne(queryFilter).populate("sender driver partner");
 
     if (!parcel) {
         throw new ApiError(StatusCodes.NOT_FOUND, "Parcel not found");
@@ -603,11 +632,11 @@ const updateParcel = async (
             throw new ApiError(StatusCodes.FORBIDDEN, "You are not assigned to this parcel");
         }
 
-        const allowedFields = ["status", "note"];
+        const allowedFields = ["status", "note", "deliveryProof"];
         const keys = Object.keys(payload);
         const isAllowed = keys.every(key => allowedFields.includes(key));
         if (!isAllowed) {
-            throw new ApiError(StatusCodes.FORBIDDEN, "Drivers can only update status and note.");
+            throw new ApiError(StatusCodes.FORBIDDEN, "Drivers can only update status, note, and delivery proof.");
         }
 
         if (payload.status === PARCEL_STATUS.ON_THE_WAY_TO_PICKUP) {

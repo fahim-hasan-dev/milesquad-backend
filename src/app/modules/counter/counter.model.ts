@@ -3,7 +3,7 @@ import { ICounter, CounterModel } from "./counter.interface";
 
 const counterSchema = new Schema<ICounter, CounterModel>({
     id: { type: String, required: true, unique: true },
-    seq: { type: Number, default: 10000 },
+    seq: { type: Number, default: 0 },
 });
 
 export const Counter = model<ICounter, CounterModel>("Counter", counterSchema);
@@ -15,5 +15,6 @@ export const getNextCustomId = async (prefix: string): Promise<string> => {
         { new: true, upsert: true }
     );
 
-    return `MS-${prefix}-${sequenceDocument.seq}`;
+    const paddedSeq = sequenceDocument.seq.toString().padStart(7, "0");
+    return `MS-${prefix}-${paddedSeq}`;
 };

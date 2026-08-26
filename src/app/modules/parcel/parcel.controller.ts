@@ -43,12 +43,13 @@ const getMyParcels = catchAsync(async (req: Request, res: Response) => {
 
 const getNearbyParcels = catchAsync(async (req: Request, res: Response) => {
     const user = req.user as JwtPayload;
-    const { latitude, longitude, distance } = req.query;
+    const { latitude, longitude, distance, maxDistance } = req.query;
+    const distanceVal = distance || maxDistance;
 
     const result = await ParcelServices.getNearbyParcels(
         Number(latitude),
         Number(longitude),
-        distance ? Number(distance) : undefined,
+        distanceVal ? Number(distanceVal) : undefined,
         user,
         req.query
     );

@@ -10,19 +10,26 @@ class QueryBuilder<T> {
   }
 
   // Searching
-  search(searchableFields: string[]) {
+  search(searchableFields: string[], extraOrConditions: any[] = []) {
     if (this?.query?.searchTerm) {
-      this.modelQuery = this.modelQuery.find({
-        $or: searchableFields.map(
-          field =>
-            ({
-              [field]: {
-                $regex: this.query.searchTerm,
-                $options: 'i',
-              },
-            }) as FilterQuery<T>,
-        ),
-      })
+      const term = this.query.searchTerm as string
+      const baseConditions = searchableFields.map(
+        field =>
+          ({
+            [field]: {
+              $regex: term,
+              $options: 'i',
+            },
+          }) as FilterQuery<T>,
+      )
+
+      const allOrConditions = [...baseConditions, ...extraOrConditions]
+
+      if (allOrConditions.length > 0) {
+        this.modelQuery = this.modelQuery.find({
+          $or: allOrConditions,
+        })
+      }
     }
     return this
   }
@@ -48,8 +55,28 @@ class QueryBuilder<T> {
     for (const key in cleanedObj) {
       const value = cleanedObj[key]
       if (typeof value === 'string' && value.includes(',')) {
-        const valuesArray = value.split(',').map(v => v.trim()).filter(Boolean)
-        filters[key] = { $in: valuesArray }
+        const rawArray = value.split(',').map(v => v.trim()).filter(Boolean)
+        const expandedArray = Array.from(
+          new Set(
+            rawArray.flatMap(v => [
+              v,
+              v.toLowerCase(),
+              v.toUpperCase(),
+              v.charAt(0).toUpperCase() + v.slice(1).toLowerCase(),
+            ])
+          )
+        )
+        filters[key] = { $in: expandedArray }
+      } else if (typeof value === 'string') {
+        const expandedArray = Array.from(
+          new Set([
+            value,
+            value.toLowerCase(),
+            value.toUpperCase(),
+            value.charAt(0).toUpperCase() + value.slice(1).toLowerCase(),
+          ])
+        )
+        filters[key] = { $in: expandedArray }
       } else if (Array.isArray(value)) {
         filters[key] = { $in: value }
       } else {

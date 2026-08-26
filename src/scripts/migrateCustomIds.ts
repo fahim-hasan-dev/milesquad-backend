@@ -5,7 +5,7 @@ import { Parcel } from "../app/modules/parcel/parcel.model";
 import { Partner } from "../app/modules/partner/partner.model";
 import { Transaction } from "../app/modules/transaction/transaction.model";
 import { Review } from "../app/modules/review/review.model";
-import { getNextCustomId } from "../app/modules/counter/counter.model";
+import { Counter, getNextCustomId } from "../app/modules/counter/counter.model";
 import { USER_ROLES } from "../enum/user";
 import 'dotenv/config';
 
@@ -15,11 +15,13 @@ async function migrateCustomIds() {
         await mongoose.connect(config.database_url as string);
         console.log("Connected successfully!");
 
+        // Clear existing counter sequences to start cleanly from 1 for padded numbers
+        await Counter.deleteMany({});
+        console.log("Cleared counter sequences for clean 5-digit padding...");
+
         // 1. Migrate Users
-        const usersToUpdate = await User.find({
-            $or: [{ userId: { $exists: false } }, { userId: null }, { userId: "" }]
-        });
-        console.log(`Found ${usersToUpdate.length} users to update with userId...`);
+        const usersToUpdate = await User.find({ status: { $ne: 'deleted' } }).sort({ createdAt: 1 });
+        console.log(`Found ${usersToUpdate.length} users to format with 5-digit padded userId...`);
 
         for (const user of usersToUpdate) {
             const prefix = user.role === USER_ROLES.DRIVER ? "DRV" : (user.role === USER_ROLES.CUSTOMER ? "CUS" : "ADM");
@@ -29,10 +31,8 @@ async function migrateCustomIds() {
         }
 
         // 2. Migrate Parcels
-        const parcelsToUpdate = await Parcel.find({
-            $or: [{ parcelId: { $exists: false } }, { parcelId: null }, { parcelId: "" }]
-        });
-        console.log(`Found ${parcelsToUpdate.length} parcels to update with parcelId...`);
+        const parcelsToUpdate = await Parcel.find({}).sort({ createdAt: 1 });
+        console.log(`Found ${parcelsToUpdate.length} parcels to format with 5-digit padded parcelId...`);
 
         for (const parcel of parcelsToUpdate) {
             const newParcelId = await getNextCustomId("PAR");
@@ -41,10 +41,8 @@ async function migrateCustomIds() {
         }
 
         // 3. Migrate Partners
-        const partnersToUpdate = await Partner.find({
-            $or: [{ partnerId: { $exists: false } }, { partnerId: null }, { partnerId: "" }]
-        });
-        console.log(`Found ${partnersToUpdate.length} partners to update with partnerId...`);
+        const partnersToUpdate = await Partner.find({ status: { $ne: 'deleted' } }).sort({ createdAt: 1 });
+        console.log(`Found ${partnersToUpdate.length} partners to format with 5-digit padded partnerId...`);
 
         for (const partner of partnersToUpdate) {
             const newPartnerId = await getNextCustomId("PTR");
@@ -52,16 +50,9 @@ async function migrateCustomIds() {
             console.log(`Updated Partner [${partner.fullName}] (${partner._id}) -> ${newPartnerId}`);
         }
 
-        // 4. Migrate Transactions (Legacy TXN- format or missing)
-        const transactionsToUpdate = await Transaction.find({
-            $or: [
-                { transactionId: { $exists: false } },
-                { transactionId: null },
-                { transactionId: "" },
-                { transactionId: { $regex: /^TXN-/ } }
-            ]
-        });
-        console.log(`Found ${transactionsToUpdate.length} transactions to update with transactionId...`);
+        // 4. Migrate Transactions
+        const transactionsToUpdate = await Transaction.find({}).sort({ createdAt: 1 });
+        console.log(`Found ${transactionsToUpdate.length} transactions to format with 5-digit padded transactionId...`);
 
         for (const transaction of transactionsToUpdate) {
             const newTransactionId = await getNextCustomId("TXN");
@@ -70,10 +61,8 @@ async function migrateCustomIds() {
         }
 
         // 5. Migrate Reviews
-        const reviewsToUpdate = await Review.find({
-            $or: [{ reviewId: { $exists: false } }, { reviewId: null }, { reviewId: "" }]
-        });
-        console.log(`Found ${reviewsToUpdate.length} reviews to update with reviewId...`);
+        const reviewsToUpdate = await Review.find({}).sort({ createdAt: 1 });
+        console.log(`Found ${reviewsToUpdate.length} reviews to format with 5-digit padded reviewId...`);
 
         for (const review of reviewsToUpdate) {
             const newReviewId = await getNextCustomId("REV");
@@ -81,7 +70,7 @@ async function migrateCustomIds() {
             console.log(`Updated Review (${review._id}) -> ${newReviewId}`);
         }
 
-        console.log("\n✅ All existing database records successfully updated with custom IDs!");
+        console.log("\n✅ All existing database records successfully updated with 5-digit zero-padded custom IDs!");
         process.exit(0);
     } catch (error) {
         console.error("❌ Migration failed with error:", error);
