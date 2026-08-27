@@ -1,5 +1,6 @@
 import { PARCEL_STATUS } from "../../../enum/parcel";
 import { Parcel } from "../parcel/parcel.model";
+import { User } from "../user/user.model";
 import { Types } from "mongoose";
 import { checkMongooseIDValidation } from "../../../shared/checkMongooseIDValidation";
 
@@ -67,54 +68,71 @@ const getDriverStats = async (driverId: string) => {
     };
 };
 
-const getDriverEarnings = async (driverId: string, range: string = 'all') => {
+const getMyEarningsSummary = async (driverId: string, query: Record<string, unknown>) => {
+    checkMongooseIDValidation(driverId, "Driver");
     const id = new Types.ObjectId(driverId);
-    const now = new Date();
-    const matchQuery: any = {
-        driver: id,
-        status: PARCEL_STATUS.DELIVERED
-    };
 
-    const todayEnd = new Date(now);
-    todayEnd.setHours(23, 59, 59, 999);
+    const hasCustomRange = Boolean(query.fromDate && query.toDate);
+    let startDate: Date;
+    let endDate: Date;
+    let filterType: "today" | "custom" = "today";
 
-    if (range === 'today') {
-        const todayStart = new Date(now);
-        todayStart.setHours(0, 0, 0, 0);
-        matchQuery.deliveredAt = { $gte: todayStart, $lte: todayEnd };
-    } else if (range === 'weekly') {
-        const weekStart = new Date(now);
-        weekStart.setDate(now.getDate() - now.getDay());
-        weekStart.setHours(0, 0, 0, 0);
-        matchQuery.deliveredAt = { $gte: weekStart, $lte: todayEnd };
-    } else if (range === 'monthly') {
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        monthStart.setHours(0, 0, 0, 0);
-        matchQuery.deliveredAt = { $gte: monthStart, $lte: todayEnd };
+    if (hasCustomRange) {
+        filterType = "custom";
+        startDate = new Date(String(query.fromDate));
+        startDate.setHours(0, 0, 0, 0);
+
+        endDate = new Date(String(query.toDate));
+        endDate.setHours(23, 59, 59, 999);
+    } else {
+        const now = new Date();
+        startDate = new Date(now);
+        startDate.setHours(0, 0, 0, 0);
+
+        endDate = new Date(now);
+        endDate.setHours(23, 59, 59, 999);
     }
 
-    const parcels = await Parcel.find(matchQuery)
-        .select('_id goodType distance driverShare deliveredAt')
-        .sort({ deliveredAt: -1 })
-        .lean();
+    // Parallel DB execution for optimal speed
+    const [driver, aggregationResult] = await Promise.all([
+        User.findById(id).select("driverInfo.wallet driverInfo.averageRating").lean(),
+        Parcel.aggregate([
+            {
+                $match: {
+                    driver: id,
+                    status: PARCEL_STATUS.DELIVERED,
+                    deliveredAt: { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    count: { $sum: 1 },
+                    earnings: { $sum: { $ifNull: ["$totalRun", "$driverShare"] } }
+                }
+            }
+        ])
+    ]);
 
-    const totalEarnings = parcels.reduce((sum, p) => sum + (p.driverShare || 0), 0);
-    const earningsList = parcels.map(p => ({
-        _id: p._id.toString(),
-        trackingId: `#TR-${p._id.toString().slice(-4).toUpperCase()}`,
-        goodType: p.goodType || 'Parcel',
-        distance: p.distance,
-        driverShare: p.driverShare,
-        deliveredAt: p.deliveredAt
-    }));
+    const currentBalance = Number((driver?.driverInfo?.wallet || 0).toFixed(2));
+    const rating = driver?.driverInfo?.averageRating || 5.0;
+    const earnings = Number((aggregationResult[0]?.earnings || 0).toFixed(2));
+    const totalDeliveries = aggregationResult[0]?.count || 0;
 
     return {
-        totalEarnings: Number(totalEarnings.toFixed(2)),
-        earningsList
+        currentBalance,
+        earnings,
+        totalDeliveries,
+        rating,
+        filter: {
+            type: filterType,
+            fromDate: startDate.toISOString().slice(0, 10),
+            toDate: endDate.toISOString().slice(0, 10)
+        }
     };
 };
 
 export const DriverStatsService = {
     getDriverStats,
-    getDriverEarnings
+    getMyEarningsSummary
 };

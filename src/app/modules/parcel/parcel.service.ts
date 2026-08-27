@@ -25,48 +25,7 @@ import { Transaction } from "../transaction/transaction.model";
 import { TRANSACTION_STATUS, TRANSACTION_TYPE } from "../../../enum/transaction";
 import config from "../../../config";
 import { generateInvoiceHTML, generateInvoicePDFBuffer } from "../../../helpers/invoiceHelper";
-
-const updateStatusProgress = (
-    currentProgress: Partial<IStatusProgress> = {},
-    newStatus: PARCEL_STATUS
-): IStatusProgress => {
-    const stepsOrder = [
-        PARCEL_STATUS.CREATED,
-        PARCEL_STATUS.CONFIRMED,
-        PARCEL_STATUS.PENDING,
-        PARCEL_STATUS.RIDER_ASSIGNED,
-        PARCEL_STATUS.ON_THE_WAY_TO_PICKUP,
-        PARCEL_STATUS.PICKED_UP,
-        PARCEL_STATUS.ON_THE_WAY_TO_DELIVERY,
-        PARCEL_STATUS.DELIVERED,
-    ];
-
-    const progress: IStatusProgress = {
-        CREATED: currentProgress.CREATED ?? true,
-        CONFIRMED: currentProgress.CONFIRMED ?? false,
-        PENDING: currentProgress.PENDING ?? false,
-        RIDER_ASSIGNED: currentProgress.RIDER_ASSIGNED ?? false,
-        ON_THE_WAY_TO_PICKUP: currentProgress.ON_THE_WAY_TO_PICKUP ?? false,
-        PICKED_UP: currentProgress.PICKED_UP ?? false,
-        ON_THE_WAY_TO_DELIVERY: currentProgress.ON_THE_WAY_TO_DELIVERY ?? false,
-        DELIVERED: currentProgress.DELIVERED ?? false,
-        CANCELLED: currentProgress.CANCELLED ?? false,
-    };
-
-    if (newStatus === PARCEL_STATUS.CANCELLED) {
-        progress.CANCELLED = true;
-        return progress;
-    }
-
-    const targetIndex = stepsOrder.indexOf(newStatus);
-    if (targetIndex !== -1) {
-        for (let i = 0; i <= targetIndex; i++) {
-            progress[stepsOrder[i]] = true;
-        }
-    }
-
-    return progress;
-};
+import { emitParcelStatusUpdate, updateStatusProgress } from "./parcel.utils";
 
 const getOrCalculateParcelDistance = async (query: Record<string, any>) => {
     const { pickupLat, pickupLng, dropLat, dropLng } = query;
@@ -175,7 +134,6 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
     });
 
     payload.baseFee = calculatedPricing.baseFee;
-    payload.baseFare = calculatedPricing.baseFare;
     payload.fuelCost = calculatedPricing.fuelCost;
     payload.timeCost = calculatedPricing.timeCost;
     payload.goodRisks = calculatedPricing.goodRisks;
@@ -189,12 +147,10 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
     payload.totalPrice = calculatedPricing.totalPrice;
     payload.additionalCost = calculatedPricing.additionalCost;
     payload.totalRun = calculatedPricing.totalRun;
-    payload.driverShare = calculatedPricing.driverShare;
 
     payload.overhead = calculatedPricing.overhead;
     payload.milesquadInsurance = calculatedPricing.milesquadInsurance;
     payload.marginMilesquad = calculatedPricing.marginMilesquad;
-    payload.platformCommission = calculatedPricing.platformCommission;
 
     payload.totalOfRun = calculatedPricing.totalOfRun;
     payload.serviceFee = calculatedPricing.serviceFee;
@@ -542,6 +498,8 @@ const acceptParcel = async (parcelId: string, driverId: string) => {
         type: USER_ROLES.CUSTOMER
     });
 
+    emitParcelStatusUpdate(updatedParcel);
+
     return updatedParcel;
 };
 
@@ -571,12 +529,12 @@ const getSingleParcel = async (id: string, user?: JwtPayload) => {
     parcelObj.review = review;
 
     const driverPricing = {
-        baseFee: parcel.baseFee || parcel.baseFare || 0,
+        baseFee: parcel.baseFee || 0,
         timeCost: parcel.timeCost || 0,
         fuelCost: parcel.fuelCost || 0,
         totalPrice: parcel.totalPrice || 0,
         additionalCost: parcel.additionalCost || 0,
-        totalRun: parcel.totalRun || parcel.driverShare || 0,
+        totalRun: parcel.totalRun || 0,
     };
 
     const customerPricing = {
@@ -589,7 +547,7 @@ const getSingleParcel = async (id: string, user?: JwtPayload) => {
     const adminPricing = {
         overhead: parcel.overhead || 0,
         milesquadInsurance: parcel.milesquadInsurance || 0,
-        marginMilesquad: parcel.marginMilesquad || parcel.platformCommission || 0,
+        marginMilesquad: parcel.marginMilesquad || 0,
     };
 
     const userRole = user?.role;
@@ -688,7 +646,7 @@ const updateParcel = async (
 
         // Credit driver's wallet balance if parcel was paid online
         if (parcel.driver && parcel.paymentMethod === PAYMENT_METHOD.ONLINE) {
-            const driverPayout = parcel.totalRun || parcel.driverShare || 0;
+            const driverPayout = parcel.totalRun || 0;
             if (driverPayout > 0) {
                 await User.findByIdAndUpdate(parcel.driver, {
                     $inc: { 'driverInfo.wallet': driverPayout },
@@ -745,6 +703,8 @@ const updateParcel = async (
         new: true,
         runValidators: true,
     }).populate("sender driver");
+
+    emitParcelStatusUpdate(updatedParcel);
 
     return updatedParcel;
 };
@@ -840,6 +800,8 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
             screen: "PARCEL_DETAILS",
         });
     }
+
+    emitParcelStatusUpdate(updatedParcel);
 
     return updatedParcel;
 };
@@ -952,6 +914,8 @@ const assignParcelByAdmin = async (
     } catch (error) {
         console.log("Failed to send assignment notifications/email:", error);
     }
+
+    emitParcelStatusUpdate(updatedParcel);
 
     return updatedParcel;
 };

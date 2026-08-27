@@ -29,17 +29,17 @@ const setupTrackingNamespace = (io: Server) => {
         const driverId = user.authId || user.id;
         logger.info(`Tracking: ${user.role} ${driverId} connected`);
 
-        // Driver live location ping
-        socket.on('driver:location-update', async (data: {
-            parcelId?: string;
-            lat: number;
-            lng: number;
-            status?: string;
-        }) => {
-            const { parcelId, lat, lng, status } = data;
+        socket.on('driver:location-update', async (rawPayload: any) => {
+            const data = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
+            const { parcelId, lat, lng, status } = data || {};
 
-            // Save global driver location in Redis
-            await trackingService.saveDriverCurrentLocation(driverId, [lng, lat], status || 'ONLINE');
+            const numLat = Number(lat);
+            const numLng = Number(lng);
+
+            if (!isNaN(numLat) && !isNaN(numLng)) {
+                // Save global driver location in Redis
+                await trackingService.saveDriverCurrentLocation(driverId, [numLng, numLat], status || 'ONLINE');
+            }
 
             const payload = {
                 driverId,
@@ -59,7 +59,7 @@ const setupTrackingNamespace = (io: Server) => {
             if (parcelId) {
                 socket.join(`parcel:${parcelId}`);
                 await trackingService.updateDriverLocation(parcelId, driverId, [lng, lat]);
-                tracking.to(`parcel:${parcelId}`).emit('location:updated', {
+                tracking.to(`parcel:${parcelId}`).emit('parcel:tracking-update', {
                     lat,
                     lng,
                     timestamp: Date.now(),
@@ -68,19 +68,26 @@ const setupTrackingNamespace = (io: Server) => {
         });
 
         // Track single driver
-        socket.on('admin:track-single-driver', async (data: { driverId: string }) => {
-            const targetDriverId = data.driverId;
-            socket.join(`driver:${targetDriverId}`);
+        socket.on('admin:track-single-driver', async (rawPayload: any) => {
+            const data = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
+            const targetDriverId = data?.driverId || data;
+            if (targetDriverId) {
+                socket.join(`driver:${targetDriverId}`);
 
-            const location = await trackingService.getSingleDriverLocationById(targetDriverId);
-            if (location) {
-                socket.emit('single-driver:location-updated', location);
+                const location = await trackingService.getSingleDriverLocationById(targetDriverId);
+                if (location) {
+                    socket.emit('single-driver:location-updated', location);
+                }
             }
         });
 
         // Untrack single driver
-        socket.on('admin:untrack-single-driver', (data: { driverId: string }) => {
-            socket.leave(`driver:${data.driverId}`);
+        socket.on('admin:untrack-single-driver', (rawPayload: any) => {
+            const data = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
+            const targetDriverId = data?.driverId || data;
+            if (targetDriverId) {
+                socket.leave(`driver:${targetDriverId}`);
+            }
         });
 
         // Track all drivers
@@ -97,13 +104,16 @@ const setupTrackingNamespace = (io: Server) => {
         });
 
         // Track parcel by user
-        socket.on('user:track-parcel', async (data: { parcelId: string }) => {
-            const { parcelId } = data;
-            socket.join(`parcel:${parcelId}`);
+        socket.on('user:track-parcel', async (rawPayload: any) => {
+            const data = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
+            const parcelId = data?.parcelId || data;
+            if (parcelId) {
+                socket.join(`parcel:${parcelId}`);
 
-            const location = await trackingService.getDriverLocation(parcelId);
-            if (location) {
-                socket.emit('location:updated', location);
+                const location = await trackingService.getDriverLocation(parcelId);
+                if (location) {
+                    socket.emit('parcel:tracking-update', location);
+                }
             }
         });
 

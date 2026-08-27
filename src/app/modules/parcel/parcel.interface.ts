@@ -46,18 +46,15 @@ export type IParcel = {
     effectiveUtilization: number;
     loadFactor: number;
     baseFee: number;
-    baseFare: number;
     fuelCost: number;
     timeCost: number;
     goodRisks: number;
     totalPrice: number;
     additionalCost: number;
     totalRun: number;
-    driverShare: number;
     overhead: number;
     milesquadInsurance: number;
     marginMilesquad: number;
-    platformCommission: number;
     totalOfRun: number;
     serviceFee: number;
     totalToPay: number;

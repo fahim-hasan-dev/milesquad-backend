@@ -76,7 +76,6 @@ const ParcelSchema = new Schema<IParcel>(
 
         // Costs
         baseFee: { type: Number, default: 0 },
-        baseFare: { type: Number, default: 0 },
         fuelCost: { type: Number, default: 0 },
         timeCost: { type: Number, default: 0 },
         goodRisks: { type: Number, default: 0 },
@@ -85,13 +84,11 @@ const ParcelSchema = new Schema<IParcel>(
         totalPrice: { type: Number, default: 0 },
         additionalCost: { type: Number, default: 0 },
         totalRun: { type: Number, default: 0 },
-        driverShare: { type: Number, default: 0 },
 
         // Admin Panel Breakdown
         overhead: { type: Number, default: 0 },
         milesquadInsurance: { type: Number, default: 0 },
         marginMilesquad: { type: Number, default: 0 },
-        platformCommission: { type: Number, default: 0 },
 
         // Customer App Breakdown
         totalOfRun: { type: Number, default: 0 },

@@ -6,9 +6,9 @@ import { DriverStatsController } from "./driverStats.controller";
 const router = express.Router();
 
 router.get(
-    "/earnings",
+    "/my-earnings",
     auth(USER_ROLES.DRIVER),
-    DriverStatsController.getDriverEarnings
+    DriverStatsController.getMyEarningsSummary
 );
 
 router.get(

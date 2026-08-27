@@ -7,7 +7,7 @@ import { JwtPayload } from "jsonwebtoken";
 
 const getMyTransactions = catchAsync(async (req: Request, res: Response) => {
     const user = req.user as JwtPayload;
-    const userId = user.authId || user.id;
+    const userId = user.authId;
     const result = await TransactionService.getMyTransactions(userId, req.query);
 
     sendResponse(res, {

@@ -19,15 +19,19 @@ const createTransaction = async (payload: Partial<ITransaction>) => {
 };
 
 const getMyTransactions = async (userId: string, query: Record<string, unknown>) => {
+    const defaultFields = "transactionId type status amount paymentMethod createdAt user parcel";
+    const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
+
     const transactionQuery = new QueryBuilder(
-        Transaction.find({ user: userId }).populate("user parcel"),
+        Transaction.find({ user: userId }),
         query
     )
         .search(["transactionId", "description", "paymentMethod"])
         .filter()
         .sort()
-        .paginate()
-        .fields();
+        .paginate();
+
+    transactionQuery.modelQuery.select(selectedFields).lean();
 
     const result = await transactionQuery.modelQuery;
     const meta = await transactionQuery.getPaginationInfo();

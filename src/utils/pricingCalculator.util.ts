@@ -32,9 +32,6 @@ export type IPricingOutput = {
 
     // Compatibility aliases
     totalDeliveryFee: number;
-    driverShare: number;
-    platformCommission: number;
-    baseFare: number;
 };
 
 const parseDurationToMinutes = (durationText: string): number => {
@@ -170,8 +167,5 @@ export const calculateParcelPricing = (input: IPricingInput): IPricingOutput => 
 
         // Aliases for compatibility
         totalDeliveryFee: totalToPay,
-        driverShare: totalRun,
-        platformCommission: marginMilesquad,
-        baseFare: baseFee,
     };
 };

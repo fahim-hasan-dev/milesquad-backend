@@ -9,7 +9,7 @@ const getAdminDashboardStats = async (year: number) => {
         {
             $group: {
                 _id: null,
-                total: { $sum: '$platformCommission' }
+                total: { $sum: '$marginMilesquad' }
             }
         }
     ]);
@@ -32,7 +32,7 @@ const getAdminDashboardStats = async (year: number) => {
         {
             $group: {
                 _id: { $month: '$deliveredAt' },
-                revenue: { $sum: '$platformCommission' }
+                revenue: { $sum: '$marginMilesquad' }
             }
         },
         { $sort: { '_id': 1 } }

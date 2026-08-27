@@ -4,90 +4,99 @@ import { IMessage } from './message.interface';
 import { Message } from './message.model';
 import { checkMongooseIDValidation } from '../../../shared/checkMongooseIDValidation';
 import { Chat } from '../chat/chat.model';
-import { MESSAGE } from '../../../enum/message';
 import { JwtPayload } from 'jsonwebtoken';
 import ApiError from '../../../errors/ApiError';
 import { StatusCodes } from 'http-status-codes';
 import { PushNotificationService } from '../notification/pushNotification.service';
 import { User } from '../user/user.model';
-import { ADMIN_ROLES } from '../../../enum/user';
+import { getIO } from '../../../helpers/socketManager';
+import { logger } from '../../../shared/logger';
 
+// Send a new message and notify chat participants
 const sendMessageToDB = async (payload: any): Promise<IMessage> => {
-  // Initialize readBy with sender's ID
   payload.readBy = [payload.sender];
-
 
   const isExistChat = await Chat.findById(payload.chatId);
   if (!isExistChat) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Chat doesn't exist!");
   }
 
-  if (!isExistChat.participants.some(p => p.toString() === payload.sender.toString())) {
+  if (!isExistChat.participants.some(p => p?.toString() === payload.sender?.toString())) {
     throw new ApiError(StatusCodes.BAD_REQUEST, "You are not a participant!");
   }
 
-  // Save to DB
-  const response = await Message.create(payload);
+  const response = (await Message.create(payload)).toObject();
 
-  // Update chat's lastMessage and lastMessageAt
+  // Update the chat with latest message information
   await Chat.findByIdAndUpdate(payload.chatId, {
     lastMessage: response._id,
     lastMessageAt: new Date()
   });
 
-  //@ts-ignore
-  const io = global.io;
-  if (io && payload.chatId) {
-    // Send message to specific Chat room
-    io.emit(`getMessage::${payload?.chatId}`, response);
+  try {
+    const io = getIO();
+    if (io && payload.chatId) {
+      const chatNamespace = io.of('/chat');
 
-    // Notify ALL participants to update their chat list (real-time sorting)
-    isExistChat.participants.forEach((participantId: any) => {
-      io.emit(`chatListUpdate::${participantId.toString()}`, {
-        chatId: payload.chatId,
-        lastMessage: response,
+      // Dispatch real-time gateway events to the specific chat room
+      chatNamespace.to(payload.chatId.toString()).emit(`message::received`, { ...response, operationType: 'created' });
+
+      // Notify participants to update their chat list
+      isExistChat.participants.forEach((participantId: any) => {
+        io.of('/notifications').to(`user:${participantId.toString()}`).emit(`chatListUpdate::${participantId.toString()}`, {
+          chatId: payload.chatId,
+          lastMessage: response,
+        });
       });
-    });
-
+    }
+  } catch (error) {
+    logger.error("Socket error in sendMessageToDB:", error);
   }
 
-  // Send Push Notification
+  // Handle push notifications for participants
   try {
     const chatStatus = await Chat.findById(payload.chatId);
     if (chatStatus) {
-      // Fetch sender details for better title
       const sender = await User.findById(payload.sender).select('fullName role');
       const title = sender?.fullName || "New Message";
       const body = payload.text ?
         (payload.text.length > 50 ? payload.text.substring(0, 50) + "..." : payload.text) :
         "Sent an attachment";
 
-      // Normal Chat recipient
       const recipientId = chatStatus.participants.find(
         (p: any) => p.toString() !== payload.sender.toString()
       );
 
       if (recipientId) {
-        const recipient = await User.findById(recipientId).select('fcmToken');
-        if (recipient?.fcmToken) {
-          await PushNotificationService.sendPushNotification(
-            recipient.fcmToken,
-            title,
-            body,
-            { screen: "CHAT", chatId: payload.chatId?.toString() }
-          );
+        // Check if recipient is currently in the chat room to avoid redundant push notifications
+        const io = getIO();
+        const chatNamespace = io.of('/chat');
+        const socketsInRoom = await chatNamespace.in(payload.chatId.toString()).fetchSockets();
+        const isRecipientInRoom = socketsInRoom.some(
+          (s: any) => s.data?.user?.authId?.toString() === recipientId.toString() || s.data?.user?.id?.toString() === recipientId.toString()
+        );
+
+        if (!isRecipientInRoom) {
+          const recipient = await User.findById(recipientId).select('fcmToken');
+          if (recipient?.fcmToken) {
+            await PushNotificationService.sendPushNotification(
+              recipient.fcmToken,
+              title,
+              body,
+              { screen: "CHAT", chatId: payload.chatId?.toString() }
+            );
+          }
         }
       }
     }
   } catch (error) {
-    console.error("Failed to send push notification:", error);
-    // Don't block the response if notification fails
+    logger.error("Failed to process push notification logic:", error);
   }
 
   return response;
 };
 
-// Get Message from db
+// Retrieve paginated messages for a chat and mark as read
 const getMessageFromDB = async (
   id: string,
   user: JwtPayload,
@@ -104,7 +113,7 @@ const getMessageFromDB = async (
     throw new Error('You are not participant of this chat')
   }
 
-  // Mark messages as read for this user
+  // Mark all unread messages as read by current user
   await Message.updateMany(
     {
       chatId: new mongoose.Types.ObjectId(id),
@@ -138,81 +147,86 @@ const getMessageFromDB = async (
   return { messages, pagination, participant: participant?.participants[0] };
 };
 
-
-// Update a message
+// Update existing message content
 const updateMessageToDB = async (messageId: string, userId: string, payload: Partial<IMessage>): Promise<IMessage | null> => {
   const message = await Message.findById(messageId);
   if (!message) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Message not found");
   }
 
-  // Check if the user is the sender
   if (message.sender.toString() !== userId) {
     throw new ApiError(StatusCodes.FORBIDDEN, "You can only update your own messages");
   }
 
-  // Update the message
   const updatedMessage = await Message.findByIdAndUpdate(
     messageId,
     payload,
     { new: true }
   );
 
-  //@ts-ignore
-  const io = global.io;
-  if (io && updatedMessage) {
-    io.emit(`getMessage::${updatedMessage.chatId}`, updatedMessage);
+  const resdata = updatedMessage?.toObject();
+
+  try {
+    const io = getIO();
+    if (io && resdata) {
+      io.of('/chat').to(resdata.chatId.toString()).emit(`message::received`, { ...resdata, operationType: 'updated' });
+    }
+  } catch (error) {
+    logger.error("Socket error in updateMessageToDB:", error);
   }
 
   return updatedMessage;
 };
 
-// Get unread message count for a specific chat
+// Get the count of unread messages in a specific chat
 const getUnreadCountForChat = async (chatId: string, userId: string): Promise<number> => {
-  const count = await Message.countDocuments({
+  return await Message.countDocuments({
     chatId: new mongoose.Types.ObjectId(chatId),
     sender: { $ne: new mongoose.Types.ObjectId(userId) },
     readBy: { $ne: new mongoose.Types.ObjectId(userId) }
   });
-
-  return count;
 };
 
-// Get total unread message count for a user
+// Get the collective unread message count for a user across all chats
 const getTotalUnreadCount = async (userId: string): Promise<number> => {
-  // Get all chats for this user
   const chats = await Chat.find({
     participants: new mongoose.Types.ObjectId(userId)
   }).select('_id');
 
   const chatIds = chats.map(chat => chat._id);
 
-  // Count unread messages across all chats
-  const count = await Message.countDocuments({
+  return await Message.countDocuments({
     chatId: { $in: chatIds },
     sender: { $ne: new mongoose.Types.ObjectId(userId) },
     readBy: { $ne: new mongoose.Types.ObjectId(userId) }
   });
-
-  return count;
 };
 
-// Delete message from DB
+// Permanently delete a message
 const deleteMessageFromDB = async (messageId: string, userId: string): Promise<IMessage | null> => {
   const message = await Message.findById(messageId);
   if (!message) {
     throw new ApiError(StatusCodes.NOT_FOUND, "Message not found");
   }
 
-  // Check if the user is the sender of the message
   if (message.sender.toString() !== userId) {
     throw new ApiError(StatusCodes.FORBIDDEN, "You can only delete your own messages");
   }
 
-  return await Message.findByIdAndDelete(messageId);
+  const deletedMessage = await Message.findByIdAndDelete(messageId);
+  const resdata = deletedMessage?.toObject();
+
+  try {
+    const io = getIO();
+    if (io && resdata) {
+      io.of('/chat').to(resdata.chatId.toString()).emit(`message::received`, { ...resdata, operationType: 'deleted' });
+    }
+  } catch (error) {
+    logger.error("Socket error in deleteMessageFromDB:", error);
+  }
+
+  return deletedMessage;
 };
-
-
 
 export const MessageService = {
   sendMessageToDB,

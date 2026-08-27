@@ -17,21 +17,20 @@ const getDriverStats = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
-const getDriverEarnings = catchAsync(async (req: Request, res: Response) => {
+const getMyEarningsSummary = catchAsync(async (req: Request, res: Response) => {
     const user = req.user as JwtPayload;
     const userId = user.authId || user.id;
-    const range = (req.query.range as string) || "all";
-    const result = await DriverStatsService.getDriverEarnings(userId, range);
+    const result = await DriverStatsService.getMyEarningsSummary(userId, req.query);
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
         success: true,
-        message: "Driver earnings statistics fetched successfully",
+        message: "Driver earnings summary fetched successfully",
         data: result
     });
 });
 
 export const DriverStatsController = {
     getDriverStats,
-    getDriverEarnings
+    getMyEarningsSummary
 };
