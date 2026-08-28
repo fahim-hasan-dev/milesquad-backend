@@ -1,8 +1,9 @@
 import PDFDocument from 'pdfkit';
+import axios from 'axios';
 import config from '../config';
 
 export const generateInvoiceHTML = (parcel: any, customer?: any) => {
-    const invoiceNo = `INV-${parcel._id?.toString().slice(-8).toUpperCase() || '0000'}`;
+    const invoiceNo = parcel.parcelId || `INV-${parcel._id?.toString().slice(-8).toUpperCase() || '0000'}`;
     const invoiceDate = new Date(parcel.createdAt || Date.now()).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
@@ -10,129 +11,128 @@ export const generateInvoiceHTML = (parcel: any, customer?: any) => {
     });
 
     const isPaid = parcel.paymentMethod === 'online' || parcel.status === 'delivered';
-    const statusText = isPaid ? 'PAID' : 'PENDING (HAND CASH)';
-    const statusBg = isPaid ? '#2ecc71' : '#f39c12';
+    const isCancelled = parcel.status === 'cancelled';
+    const statusText = isPaid ? 'PAID' : isCancelled ? 'CANCELLED' : 'PENDING (HAND CASH)';
 
     const totalOfRun = parcel.totalOfRun ?? 0;
     const serviceFee = parcel.serviceFee ?? 0;
     const goodRisks = parcel.goodRisks ?? 0;
     const totalToPay = parcel.totalToPay ?? parcel.totalDeliveryFee ?? 0;
 
-    const logoHeader = config.logo_url
-        ? `<div style="text-align:center; margin-bottom:20px;">
-             <img src="${config.logo_url}" alt="Milesquad Logo" style="max-height:60px; max-width:200px; width:auto; height:auto; display:inline-block; object-fit:contain;" />
-           </div>`
-        : '';
+    const brandDark = '#1B2A4A';
+    const brandGreen = '#16A34A';
+
+    const logoHtml = config.logo_url
+        ? `<img src="${config.logo_url}" alt="Milesquad Logo" style="max-height:60px; max-width:220px; width:auto; height:auto; display:block; margin:0 auto; object-fit:contain;" />`
+        : `<h1 style="margin:0; color:${brandDark}; font-size:28px; font-weight:800; font-family:'Segoe UI', Arial, sans-serif; letter-spacing:1px;">MILES<span style="color:${brandGreen};">QUAD</span></h1>`;
 
     return `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Invoice #${invoiceNo}</title>
 </head>
-<body style="margin:0; padding:0; background-color:#f4f7f6; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f7f6; padding:30px 0;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 6px 20px rgba(0,0,0,0.06); padding:40px;">
-          
-          <!-- Header Logo & Title -->
-          <tr>
-            <td colspan="2">
-              ${logoHeader}
-              <table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid #edf2f7; padding-bottom:20px; margin-bottom:25px;">
-                <tr>
-                  <td style="vertical-align:middle;">
-                    <h1 style="margin:0; font-size:24px; color:#1a202c; font-weight:700;">BOOKING INVOICE</h1>
-                    <p style="margin:4px 0 0; color:#718096; font-size:14px;">Invoice No: <strong>#${invoiceNo}</strong></p>
-                    <p style="margin:2px 0 0; color:#718096; font-size:13px;">Date: ${invoiceDate}</p>
-                  </td>
-                  <td align="right" style="vertical-align:middle;">
-                    <span style="background-color:${statusBg}; color:#ffffff; font-size:13px; font-weight:700; padding:6px 14px; border-radius:20px; text-transform:uppercase; letter-spacing:0.5px;">
-                      ${statusText}
-                    </span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
+<body style="margin:0; padding:40px 20px; background-color:#ffffff; font-family:'Segoe UI', Arial, sans-serif; color:#1B2A4A; line-height:1.5;">
+  <div style="max-width:650px; margin:0 auto;">
+    
+    <!-- Top Center Logo & Header Info -->
+    <div style="text-align:center; margin-bottom:25px;">
+      <div style="margin-bottom:14px; text-align:center;">
+        ${logoHtml}
+      </div>
+      <div style="font-size:20px; font-weight:800; color:${brandDark}; letter-spacing:1px; text-transform:uppercase; margin-top:10px;">INVOICE</div>
+      <div style="font-size:13px; color:#4b5563; margin-top:6px;">
+        Invoice No: <strong style="color:${brandDark};">#${invoiceNo}</strong> &nbsp;&bull;&nbsp;
+        Date: <strong style="color:${brandDark};">${invoiceDate}</strong> &nbsp;&bull;&nbsp;
+        Status: <strong style="color:${brandGreen};">${statusText}</strong>
+      </div>
+    </div>
 
-          <!-- Billed To & Delivery Details -->
-          <tr>
-            <td colspan="2">
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:25px;">
-                <tr>
-                  <td width="50%" style="vertical-align:top; padding-right:15px;">
-                    <h3 style="margin:0 0 8px; font-size:14px; text-transform:uppercase; color:#a0aec0; letter-spacing:0.5px;">Billed To</h3>
-                    <p style="margin:0; font-size:15px; font-weight:600; color:#2d3748;">${customer?.fullName || 'Customer'}</p>
-                    <p style="margin:4px 0 0; font-size:13px; color:#4a5568;">📞 ${customer?.phone || parcel.receiverPhone || 'N/A'}</p>
-                    ${customer?.email ? `<p style="margin:2px 0 0; font-size:13px; color:#4a5568;">✉️ ${customer.email}</p>` : ''}
-                  </td>
-                  <td width="50%" style="vertical-align:top; padding-left:15px;">
-                    <h3 style="margin:0 0 8px; font-size:14px; text-transform:uppercase; color:#a0aec0; letter-spacing:0.5px;">Delivery Info</h3>
-                    <p style="margin:0; font-size:13px; color:#4a5568;"><strong>Vehicle:</strong> ${parcel.vehicleType || 'Standard'}</p>
-                    <p style="margin:2px 0 0; font-size:13px; color:#4a5568;"><strong>Good Type:</strong> ${parcel.goodType || 'Parcel'}</p>
-                    <p style="margin:2px 0 0; font-size:13px; color:#4a5568;"><strong>Payment Method:</strong> ${(parcel.paymentMethod || 'Hand Cash').toUpperCase()}</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
+    <!-- Divider Line -->
+    <div style="border-bottom:1px solid #e5e7eb; margin-bottom:28px;"></div>
 
-          <!-- Pickup & Drop Locations -->
-          <tr>
-            <td colspan="2">
-              <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:15px; margin-bottom:30px;">
-                <p style="margin:0 0 8px; font-size:13px; color:#2b6cb0;">📍 <strong>Pickup:</strong> ${parcel.pickupLocation?.address || 'N/A'}</p>
-                <p style="margin:0; font-size:13px; color:#c53030;">🏁 <strong>Dropoff:</strong> ${parcel.dropLocation?.address || 'N/A'}</p>
-              </div>
-            </td>
-          </tr>
+    <!-- 2-Column Details -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px; font-size:13px;">
+      <tr>
+        <!-- BILLED TO -->
+        <td width="48%" valign="top" style="vertical-align:top;">
+          <div style="font-size:12px; font-weight:800; color:${brandGreen}; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px;">BILLED TO</div>
+          <div style="font-size:14px; font-weight:700; color:${brandDark}; margin-bottom:4px;">${customer?.fullName || 'Customer'}</div>
+          <div style="color:#4b5563; line-height:1.6;">
+            Phone: ${customer?.phone || parcel.receiverPhone || 'N/A'}<br />
+            Email: ${customer?.email || 'N/A'}<br />
+            Payment Method: ${(parcel.paymentMethod || 'HAND_CASH').toUpperCase()}
+          </div>
+        </td>
+        <td width="4%"></td>
+        <!-- DELIVERY DETAILS -->
+        <td width="48%" valign="top" style="vertical-align:top;">
+          <div style="font-size:12px; font-weight:800; color:${brandGreen}; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px;">DELIVERY DETAILS</div>
+          <div style="color:#4b5563; line-height:1.6;">
+            <strong style="color:${brandDark};">Good Type:</strong> ${parcel.goodType || 'Parcel'}<br />
+            <strong style="color:${brandDark};">Vehicle Type:</strong> ${parcel.vehicleType || 'Standard'}<br />
+            <strong style="color:${brandDark};">Pickup:</strong> ${parcel.pickupLocation?.address || 'N/A'}<br />
+            <strong style="color:${brandDark};">Dropoff:</strong> ${parcel.dropLocation?.address || 'N/A'}
+          </div>
+        </td>
+      </tr>
+    </table>
 
-          <!-- Price Breakdown Table -->
-          <tr>
-            <td colspan="2">
-              <h3 style="margin:0 0 12px; font-size:16px; color:#2d3748; font-weight:700;">Price Breakdown</h3>
-              <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; margin-bottom:25px; background-color:#f7fafc; border-radius:8px; overflow:hidden;">
-                <tr style="border-bottom:1px solid #e2e8f0;">
-                  <td style="padding:12px 16px; font-size:14px; color:#4a5568;">Total of the run</td>
-                  <td align="right" style="padding:12px 16px; font-size:14px; color:#2d3748; font-weight:600;">${totalOfRun.toLocaleString()} XOF</td>
-                </tr>
-                <tr style="border-bottom:1px solid #e2e8f0;">
-                  <td style="padding:12px 16px; font-size:14px; color:#4a5568;">Service fee</td>
-                  <td align="right" style="padding:12px 16px; font-size:14px; color:#2d3748; font-weight:600;">${serviceFee.toLocaleString()} XOF</td>
-                </tr>
-                <tr style="border-bottom:1px solid #e2e8f0;">
-                  <td style="padding:12px 16px; font-size:14px; color:#4a5568;">Good insurance</td>
-                  <td align="right" style="padding:12px 16px; font-size:14px; color:#2d3748; font-weight:600;">${goodRisks.toLocaleString()} XOF</td>
-                </tr>
-                <tr style="background-color:#edf2f7;">
-                  <td style="padding:16px; font-size:16px; color:#1a202c; font-weight:700;">Total to pay</td>
-                  <td align="right" style="padding:16px; font-size:20px; color:#276749; font-weight:800;">${totalToPay.toLocaleString()} XOF</td>
-                </tr>
-              </table>
-            </td>
+    <!-- PRICE BREAKDOWN -->
+    <div style="margin-bottom:32px;">
+      <div style="font-size:12px; font-weight:800; color:${brandGreen}; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:10px;">PRICE BREAKDOWN</div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px; border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:2px solid ${brandDark};">
+            <th align="left" style="padding:8px 0; font-weight:700; color:${brandDark};">Description</th>
+            <th align="right" style="padding:8px 0; font-weight:700; color:${brandDark};">Amount (XOF)</th>
           </tr>
-
-          <!-- Footer Note -->
-          <tr>
-            <td colspan="2" align="center" style="border-top:1px solid #edf2f7; padding-top:20px;">
-              <p style="margin:0; font-size:13px; color:#a0aec0;">Thank you for delivering with <strong>Milesquad</strong>!</p>
-              <p style="margin:4px 0 0; font-size:12px; color:#cbd5e0;">If you have any questions, please contact support.</p>
-            </td>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:10px 0; color:#4b5563;">Total of the run</td>
+            <td align="right" style="padding:10px 0; color:${brandDark}; font-weight:600;">${totalOfRun.toLocaleString('en-US')} XOF</td>
           </tr>
+          <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:10px 0; color:#4b5563;">Service fee</td>
+            <td align="right" style="padding:10px 0; color:${brandDark}; font-weight:600;">${serviceFee.toLocaleString('en-US')} XOF</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:10px 0; color:#4b5563;">Good insurance</td>
+            <td align="right" style="padding:10px 0; color:${brandDark}; font-weight:600;">${goodRisks.toLocaleString('en-US')} XOF</td>
+          </tr>
+          <tr style="border-top:2px solid ${brandDark};">
+            <td style="padding:14px 0; font-size:15px; font-weight:800; color:${brandDark};">Total to Pay</td>
+            <td align="right" style="padding:14px 0; font-size:18px; font-weight:800; color:${brandGreen};">${totalToPay.toLocaleString('en-US')} XOF</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-        </table>
-      </td>
-    </tr>
-  </table>
+    <!-- FOOTER -->
+    <div style="border-top:1px solid #e5e7eb; padding-top:18px; text-align:center; font-size:12px; color:#4b5563;">
+      Thank you for delivering with Milesquad!
+    </div>
+
+  </div>
 </body>
 </html>
     `;
 };
 
-export const generateInvoicePDFBuffer = (parcel: any, customer?: any): Promise<Buffer> => {
+export const generateInvoicePDFBuffer = async (parcel: any, customer?: any): Promise<Buffer> => {
+    let logoBuffer: Buffer | null = null;
+    if (config.logo_url) {
+        try {
+            const res = await axios.get(config.logo_url, { responseType: 'arraybuffer', timeout: 3000 });
+            logoBuffer = Buffer.from(res.data);
+        } catch {
+            logoBuffer = null;
+        }
+    }
+
     return new Promise((resolve, reject) => {
         try {
             const doc = new PDFDocument({ margin: 40, size: 'A4' });
@@ -141,7 +141,7 @@ export const generateInvoicePDFBuffer = (parcel: any, customer?: any): Promise<B
             doc.on('data', (chunk) => buffers.push(chunk));
             doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-            const invoiceNo = `INV-${parcel._id?.toString().slice(-8).toUpperCase() || '0000'}`;
+            const invoiceNo = parcel.parcelId || `INV-${parcel._id?.toString().slice(-8).toUpperCase() || '0000'}`;
             const invoiceDate = new Date(parcel.createdAt || Date.now()).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'short',
@@ -149,69 +149,104 @@ export const generateInvoicePDFBuffer = (parcel: any, customer?: any): Promise<B
             });
 
             const isPaid = parcel.paymentMethod === 'online' || parcel.status === 'delivered';
+            const isCancelled = parcel.status === 'cancelled';
+            const statusText = isPaid ? 'PAID' : isCancelled ? 'CANCELLED' : 'PENDING (HAND CASH)';
+
             const totalOfRun = parcel.totalOfRun ?? 0;
             const serviceFee = parcel.serviceFee ?? 0;
             const goodRisks = parcel.goodRisks ?? 0;
             const totalToPay = parcel.totalToPay ?? parcel.totalDeliveryFee ?? 0;
 
-            // Title Banner
-            doc.fillColor('#10B981').fontSize(22).text('MILESQUAD INVOICE', { align: 'center' });
-            doc.moveDown(0.5);
+            const brandDark = '#1B2A4A';
+            const brandGreen = '#16A34A';
+            const mutedColor = '#4B5563';
 
-            doc.fillColor('#4A5568').fontSize(11).text(`Invoice No: #${invoiceNo}`, { align: 'right' });
-            doc.text(`Date: ${invoiceDate}`, { align: 'right' });
-            doc.text(`Status: ${isPaid ? 'PAID' : 'PENDING (HAND CASH)'}`, { align: 'right' });
-            doc.moveDown(1.5);
+            let headerEndY = 35;
 
-            // Billed To
-            doc.fillColor('#2D3748').fontSize(14).text('BILLED TO', { underline: true });
-            doc.fontSize(11).fillColor('#4A5568');
-            doc.text(`Customer Name: ${customer?.fullName || 'Customer'}`);
-            doc.text(`Phone: ${customer?.phone || parcel.receiverPhone || 'N/A'}`);
-            if (customer?.email) doc.text(`Email: ${customer.email}`);
-            doc.moveDown(1);
+            // Top Center Logo
+            if (logoBuffer) {
+                try {
+                    doc.image(logoBuffer, (doc.page.width - 120) / 2, 30, { width: 120 });
+                    headerEndY = 95;
+                } catch {
+                    doc.fillColor(brandDark).fontSize(24).font('Helvetica-Bold').text('MILESQUAD', { align: 'center' });
+                    headerEndY = 65;
+                }
+            } else {
+                doc.fillColor(brandDark).fontSize(24).font('Helvetica-Bold').text('MILESQUAD', { align: 'center' });
+                headerEndY = 65;
+            }
 
-            // Delivery Details
-            doc.fillColor('#2D3748').fontSize(14).text('DELIVERY DETAILS', { underline: true });
-            doc.fontSize(11).fillColor('#4A5568');
-            doc.text(`Good Type: ${parcel.goodType || 'Parcel'}`);
-            doc.text(`Vehicle Type: ${parcel.vehicleType || 'Standard'}`);
-            doc.text(`Payment Method: ${(parcel.paymentMethod || 'Hand Cash').toUpperCase()}`);
-            doc.text(`Pickup Address: ${parcel.pickupLocation?.address || 'N/A'}`);
-            doc.text(`Dropoff Address: ${parcel.dropLocation?.address || 'N/A'}`);
-            doc.moveDown(1.5);
+            // Top Center Invoice Title & Meta Info
+            doc.y = headerEndY;
+            doc.fillColor(brandDark).fontSize(16).font('Helvetica-Bold').text('INVOICE', { align: 'center' });
+            doc.moveDown(0.3);
+            doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text(`Invoice No: #${invoiceNo}   |   Date: ${invoiceDate}   |   Status: ${statusText}`, { align: 'center' });
+            doc.moveDown(1.2);
 
-            // Price Breakdown Table
-            doc.fillColor('#2D3748').fontSize(14).text('PRICE BREAKDOWN', { underline: true });
-            doc.moveDown(0.5);
+            // Divider Line
+            const line1Y = doc.y;
+            doc.moveTo(40, line1Y).lineTo(555, line1Y).strokeColor('#E5E7EB').lineWidth(1).stroke();
+            doc.y = line1Y + 18;
 
-            const tableTop = doc.y;
-            doc.fontSize(11).fillColor('#4A5568');
+            const colY = doc.y;
 
-            doc.text('Total of the run', 50, tableTop);
-            doc.text(`${totalOfRun.toLocaleString()} XOF`, 400, tableTop, { align: 'right' });
-            doc.moveDown(0.5);
+            // Column 1: BILLED TO
+            doc.fillColor(brandGreen).fontSize(11).font('Helvetica-Bold').text('BILLED TO', 40, colY);
+            doc.fillColor(brandDark).fontSize(10).font('Helvetica-Bold').text(customer?.fullName || 'Customer', 40, colY + 16);
+            doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text(`Phone: ${customer?.phone || parcel.receiverPhone || 'N/A'}`, 40, colY + 30);
+            doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text(`Email: ${customer?.email || 'N/A'}`, 40, colY + 43);
+            doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text(`Payment Method: ${(parcel.paymentMethod || 'HAND_CASH').toUpperCase()}`, 40, colY + 56);
 
-            const row2Top = doc.y;
-            doc.text('Service fee', 50, row2Top);
-            doc.text(`${serviceFee.toLocaleString()} XOF`, 400, row2Top, { align: 'right' });
-            doc.moveDown(0.5);
+            // Column 2: DELIVERY DETAILS
+            doc.fillColor(brandGreen).fontSize(11).font('Helvetica-Bold').text('DELIVERY DETAILS', 310, colY);
+            doc.fillColor(brandDark).fontSize(9).font('Helvetica-Bold').text('Good Type: ', 310, colY + 16, { continued: true })
+               .font('Helvetica').fillColor(mutedColor).text(parcel.goodType || 'Parcel');
+            doc.fillColor(brandDark).fontSize(9).font('Helvetica-Bold').text('Vehicle Type: ', 310, colY + 30, { continued: true })
+               .font('Helvetica').fillColor(mutedColor).text(parcel.vehicleType || 'Standard');
+            doc.fillColor(brandDark).fontSize(9).font('Helvetica-Bold').text('Pickup: ', 310, colY + 43, { continued: true })
+               .font('Helvetica').fillColor(mutedColor).text(parcel.pickupLocation?.address || 'N/A', { width: 245 });
+            doc.fillColor(brandDark).fontSize(9).font('Helvetica-Bold').text('Dropoff: ', 310, colY + 68, { continued: true })
+               .font('Helvetica').fillColor(mutedColor).text(parcel.dropLocation?.address || 'N/A', { width: 245 });
 
-            const row3Top = doc.y;
-            doc.text('Good insurance', 50, row3Top);
-            doc.text(`${goodRisks.toLocaleString()} XOF`, 400, row3Top, { align: 'right' });
+            // Price Breakdown Section
+            doc.y = Math.max(colY + 100, doc.y + 20);
+            const breakdownY = doc.y;
+
+            doc.fillColor(brandGreen).fontSize(11).font('Helvetica-Bold').text('PRICE BREAKDOWN', 40, breakdownY);
             doc.moveDown(0.8);
 
-            // Total
-            doc.strokeColor('#CBD5E0').lineWidth(1).lineCap('butt').moveTo(50, doc.y).lineTo(540, doc.y).stroke();
-            doc.moveDown(0.5);
+            const tableTop = doc.y;
+            // Table Header Line
+            doc.fillColor(brandDark).fontSize(9).font('Helvetica-Bold').text('Description', 40, tableTop);
+            doc.fillColor(brandDark).fontSize(9).font('Helvetica-Bold').text('Amount (XOF)', 400, tableTop, { align: 'right', width: 155 });
+            
+            doc.moveTo(40, tableTop + 14).lineTo(555, tableTop + 14).strokeColor(brandDark).lineWidth(1.5).stroke();
 
-            const totalTop = doc.y;
-            doc.fillColor('#10B981').fontSize(14).text('Total to pay', 50, totalTop);
-            doc.fillColor('#10B981').fontSize(16).text(`${totalToPay.toLocaleString()} XOF`, 400, totalTop, { align: 'right' });
+            // Table Rows
+            let rowY = tableTop + 22;
+            doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text('Total of the run', 40, rowY);
+            doc.fillColor(brandDark).fontSize(9).font('Helvetica').text(`${totalOfRun.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
+            doc.moveTo(40, rowY + 14).lineTo(555, rowY + 14).strokeColor('#E5E7EB').lineWidth(0.5).stroke();
 
-            doc.moveDown(3);
-            doc.fillColor('#A0AEC0').fontSize(10).text('Thank you for delivering with Milesquad!', { align: 'center' });
+            rowY += 20;
+            doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text('Service fee', 40, rowY);
+            doc.fillColor(brandDark).fontSize(9).font('Helvetica').text(`${serviceFee.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
+            doc.moveTo(40, rowY + 14).lineTo(555, rowY + 14).strokeColor('#E5E7EB').lineWidth(0.5).stroke();
+
+            rowY += 20;
+            doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text('Good insurance', 40, rowY);
+            doc.fillColor(brandDark).fontSize(9).font('Helvetica').text(`${goodRisks.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
+            doc.moveTo(40, rowY + 14).lineTo(555, rowY + 14).strokeColor('#E5E7EB').lineWidth(1.5).stroke();
+
+            // Total to Pay
+            rowY += 22;
+            doc.fillColor(brandDark).fontSize(11).font('Helvetica-Bold').text('Total to Pay', 40, rowY);
+            doc.fillColor(brandGreen).fontSize(14).font('Helvetica-Bold').text(`${totalToPay.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
+
+            // Footer
+            doc.moveTo(40, 750).lineTo(555, 750).strokeColor('#E5E7EB').lineWidth(1).stroke();
+            doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text('Thank you for delivering with Milesquad!', 40, 762, { align: 'center', width: 515 });
 
             doc.end();
         } catch (error) {
@@ -219,3 +254,6 @@ export const generateInvoicePDFBuffer = (parcel: any, customer?: any): Promise<B
         }
     });
 };
+
+
+

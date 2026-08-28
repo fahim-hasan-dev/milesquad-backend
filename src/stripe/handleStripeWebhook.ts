@@ -13,6 +13,7 @@ import { TRANSACTION_STATUS, TRANSACTION_TYPE } from '../enum/transaction'
 import { User } from '../app/modules/user/user.model'
 import { emailHelper } from '../helpers/emailHelper'
 import { generateInvoiceHTML, generateInvoicePDFBuffer } from '../helpers/invoiceHelper'
+import { notifyNearbyDriversOfNewParcel } from '../app/modules/parcel/parcel.utils'
 
 const handleStripeWebhook = async (req: Request, res: Response) => {
     console.log('hit stripe webhook')
@@ -79,9 +80,13 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
                                 logger.error('Failed to log payment transaction:', txnError);
                             }
 
+                            const updatedParcel = await Parcel.findById(parcelId);
+                            if (updatedParcel) {
+                                notifyNearbyDriversOfNewParcel(updatedParcel);
+                            }
+
                             // Send Online Paid Invoice Email to Customer if email exists
                             try {
-                                const updatedParcel = await Parcel.findById(parcelId);
                                 const customer = await User.findById(parcel.sender);
                                 if (customer?.email && updatedParcel) {
                                     const html = generateInvoiceHTML(updatedParcel, customer);

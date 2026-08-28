@@ -79,6 +79,12 @@ router.get(
 );
 
 router.get(
+    "/export",
+    auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+    ParcelController.exportParcels
+);
+
+router.get(
     "/:id",
     auth(USER_ROLES.DRIVER, USER_ROLES.CUSTOMER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     ParcelController.getSingleParcel

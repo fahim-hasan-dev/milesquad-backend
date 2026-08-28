@@ -181,6 +181,12 @@ const approveDriverProfile = async (
     return updatedUser;
 };
 
+import { trackingService } from '../../../helpers/trackingService';
+
+const getDriverLiveLocation = async (driverId: string) => {
+    return await trackingService.getSingleDriverLocationById(driverId);
+};
+
 export const UserServices = {
     updateProfile,
     getAllUser,
@@ -189,4 +195,5 @@ export const UserServices = {
     getProfile,
     deleteMyAccount,
     approveDriverProfile,
+    getDriverLiveLocation,
 };

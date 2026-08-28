@@ -4,6 +4,8 @@ import { jwtHelper } from './jwtHelper';
 import { trackingService } from './trackingService';
 import { logger } from '../shared/logger';
 import config from '../config';
+import { Parcel } from '../app/modules/parcel/parcel.model';
+import { PARCEL_STATUS } from '../enum/parcel';
 
 const authenticateSocket = (socket: Socket, next: (err?: Error) => void) => {
     const token = socket.handshake.auth?.token || socket.handshake.headers.token;
@@ -77,6 +79,8 @@ const setupTrackingNamespace = (io: Server) => {
                 const location = await trackingService.getSingleDriverLocationById(targetDriverId);
                 if (location) {
                     socket.emit('single-driver:location-updated', location);
+                } else {
+                    socket.emit('single-driver:offline', { driverId: targetDriverId, isOffline: true });
                 }
             }
         });
@@ -110,7 +114,28 @@ const setupTrackingNamespace = (io: Server) => {
             if (parcelId) {
                 socket.join(`parcel:${parcelId}`);
 
-                const location = await trackingService.getDriverLocation(parcelId);
+                let location = await trackingService.getDriverLocation(parcelId);
+
+                // If no active parcel tracking ping yet, check if driver is assigned and retrieve last known location
+                if (!location) {
+                    try {
+                        const parcel = await Parcel.findById(parcelId).select("driver status");
+                        if (parcel && parcel.driver && parcel.status !== PARCEL_STATUS.DELIVERED && parcel.status !== PARCEL_STATUS.CANCELLED) {
+                            const driverLocation = await trackingService.getSingleDriverLocationById(parcel.driver.toString());
+                            if (driverLocation) {
+                                location = {
+                                    lat: driverLocation.lat,
+                                    lng: driverLocation.lng,
+                                    timestamp: driverLocation.updatedAt,
+                                };
+                                await trackingService.updateDriverLocation(parcelId, parcel.driver.toString(), [driverLocation.lng, driverLocation.lat]);
+                            }
+                        }
+                    } catch (e) {
+                        logger.error(`Error fetching driver location for parcel ${parcelId}:`, e);
+                    }
+                }
+
                 if (location) {
                     socket.emit('parcel:tracking-update', location);
                 }

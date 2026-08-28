@@ -25,7 +25,12 @@ import { Transaction } from "../transaction/transaction.model";
 import { TRANSACTION_STATUS, TRANSACTION_TYPE } from "../../../enum/transaction";
 import config from "../../../config";
 import { generateInvoiceHTML, generateInvoicePDFBuffer } from "../../../helpers/invoiceHelper";
-import { emitParcelStatusUpdate, updateStatusProgress } from "./parcel.utils";
+import {
+    emitParcelStatusUpdate,
+    updateStatusProgress,
+    notifyNearbyDriversOfNewParcel,
+    notifyNearbyDriversOfRemovedParcel,
+} from "./parcel.utils";
 
 const getOrCalculateParcelDistance = async (query: Record<string, any>) => {
     const { pickupLat, pickupLng, dropLat, dropLng } = query;
@@ -242,6 +247,8 @@ const selectPaymentMethod = async (
             console.error("Failed to send hand_cash invoice email:", mailErr);
         }
 
+        notifyNearbyDriversOfNewParcel(updatedParcel);
+
         return {
             paymentMethod: PAYMENT_METHOD.HAND_CASH,
             parcel: updatedParcel,
@@ -289,7 +296,7 @@ const getAllParcels = async (query: Record<string, unknown>) => {
     }
 
     const parcelQuery = new QueryBuilder(
-        Parcel.find().populate([
+        Parcel.find({ status: { $ne: PARCEL_STATUS.CREATED } }).populate([
             { path: "sender driver", select: "userId fullName phone email image" },
             { path: "partner", select: "partnerId fullName phone rolePosition email" }
         ]),
@@ -499,6 +506,7 @@ const acceptParcel = async (parcelId: string, driverId: string) => {
     });
 
     emitParcelStatusUpdate(updatedParcel);
+    notifyNearbyDriversOfRemovedParcel(parcelId);
 
     return updatedParcel;
 };
@@ -802,6 +810,7 @@ const cancelParcel = async (id: string, user: JwtPayload) => {
     }
 
     emitParcelStatusUpdate(updatedParcel);
+    notifyNearbyDriversOfRemovedParcel(id);
 
     return updatedParcel;
 };
@@ -916,26 +925,32 @@ const assignParcelByAdmin = async (
     }
 
     emitParcelStatusUpdate(updatedParcel);
+    notifyNearbyDriversOfRemovedParcel(parcelId);
 
     return updatedParcel;
 };
 
 const getParcelInvoice = async (parcelId: string) => {
-    const parcel = await Parcel.findById(parcelId).populate("sender driver partner");
+    const isObjectId = Types.ObjectId.isValid(parcelId);
+    const queryFilter = isObjectId ? { _id: parcelId } : { parcelId: parcelId };
+
+    const parcel = await Parcel.findOne(queryFilter).populate("sender driver partner");
     if (!parcel) {
         throw new ApiError(StatusCodes.NOT_FOUND, "Parcel not found");
     }
 
-    const customer = await User.findById(parcel.sender);
+    const customer = parcel.sender;
     const html = generateInvoiceHTML(parcel, customer);
     const pdfBuffer = await generateInvoicePDFBuffer(parcel, customer);
+
+    const formattedId = parcel.parcelId || `INV-${parcel._id.toString().slice(-8).toUpperCase()}`;
 
     return {
         parcel,
         customer,
         html,
         pdfBuffer,
-        filename: `Invoice-${parcel._id.toString().slice(-8).toUpperCase()}.pdf`,
+        filename: `${formattedId}.pdf`,
     };
 };
 
@@ -1067,6 +1082,97 @@ const getCurrentActiveParcel = async (userId: string, role: string) => {
     return activeParcel;
 };
 
+const exportParcelsData = async (query: Record<string, any>) => {
+    const { startDate, endDate, status, filter } = query;
+
+    const filterObj: Record<string, any> = {
+        status: { $ne: PARCEL_STATUS.CREATED }
+    };
+
+    // Date range filter
+    if (startDate || endDate) {
+        filterObj.createdAt = {};
+        if (startDate) {
+            filterObj.createdAt.$gte = new Date(startDate);
+        }
+        if (endDate) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            filterObj.createdAt.$lte = end;
+        }
+    }
+
+    // Status filter
+    const statusVal = filter || status;
+    if (statusVal && statusVal.toUpperCase() !== "ALL") {
+        const normalized = statusVal.toUpperCase();
+        if (normalized === "PENDING") {
+            filterObj.status = PARCEL_STATUS.PENDING;
+        } else if (normalized === "ASSIGNED") {
+            filterObj.status = {
+                $in: [
+                    PARCEL_STATUS.RIDER_ASSIGNED,
+                    PARCEL_STATUS.ON_THE_WAY_TO_PICKUP,
+                    PARCEL_STATUS.PICKED_UP,
+                    PARCEL_STATUS.ON_THE_WAY_TO_DELIVERY,
+                ],
+            };
+        } else if (normalized === "DELIVERED") {
+            filterObj.status = PARCEL_STATUS.DELIVERED;
+        } else if (normalized === "CANCELLED") {
+            filterObj.status = PARCEL_STATUS.CANCELLED;
+        } else {
+            filterObj.status = statusVal;
+        }
+    }
+
+    const parcels = await Parcel.find(filterObj)
+        .populate("sender driver partner")
+        .sort({ createdAt: -1 });
+
+    return parcels.map((parcel: any) => {
+        const pickupAddr = parcel.pickupLocation?.address || parcel.pickupLocation?.name || "";
+        const dropAddr = parcel.dropLocation?.address || parcel.dropLocation?.name || "";
+        const dimStr = parcel.dimension
+            ? `${parcel.dimension.length || 0} x ${parcel.dimension.width || 0} x ${parcel.dimension.height || 0} cm`
+            : "N/A";
+
+        return {
+            "Order ID": parcel.parcelId || `#${parcel._id.toString().slice(-6).toUpperCase()}`,
+            "Created Date": parcel.createdAt ? new Date(parcel.createdAt).toISOString().replace("T", " ").substring(0, 19) : "",
+            "Delivery Date": parcel.deliveryDate ? new Date(parcel.deliveryDate).toISOString().substring(0, 10) : "",
+            "Status": (parcel.status || "").replace(/_/g, " ").toUpperCase(),
+            "Good Type": parcel.goodType || "N/A",
+            "Vehicle Type": (parcel.vehicleType || "N/A").toUpperCase(),
+            "Number of Goods": parcel.numberOfGoods || 1,
+            "Total Weight (kg)": parcel.totalWeight || 0,
+            "Dimensions": dimStr,
+            "Same Day Pickup": parcel.sameDayPickup ? "Yes" : "No",
+            "Customer Name": parcel.sender?.fullName || "N/A",
+            "Customer Email": parcel.sender?.email || "N/A",
+            "Customer Phone": parcel.sender?.phone || "N/A",
+            "Driver Name": parcel.driver?.fullName || "N/A",
+            "Driver Phone": parcel.driver?.phone || "N/A",
+            "Partner Name": parcel.partner?.fullName || "N/A",
+            "Pickup Address": pickupAddr,
+            "Dropoff Address": dropAddr,
+            "Receiver Phone": parcel.receiverPhone || "N/A",
+            "Distance (km)": parcel.distance || 0,
+            "Duration": parcel.duration || "N/A",
+            "Item Value ($)": parcel.itemValue || 0,
+            "Base Fee ($)": parcel.baseFee || 0,
+            "Fuel Cost ($)": parcel.fuelCost || 0,
+            "Time Cost ($)": parcel.timeCost || 0,
+            "Service Fee ($)": parcel.serviceFee || 0,
+            "Goods Risk ($)": parcel.goodRisks || 0,
+            "Overhead ($)": parcel.overhead || 0,
+            "Total To Pay ($)": parcel.totalToPay || parcel.totalDeliveryFee || 0,
+            "Payment Method": (parcel.paymentMethod || "ONLINE").replace(/_/g, " ").toUpperCase(),
+            "Note": parcel.note || "",
+        };
+    });
+};
+
 export const ParcelServices = {
     createParcel,
     selectPaymentMethod,
@@ -1083,4 +1189,5 @@ export const ParcelServices = {
     getParcelInvoice,
     getAvailableDriversForParcel,
     getCurrentActiveParcel,
+    exportParcelsData,
 };

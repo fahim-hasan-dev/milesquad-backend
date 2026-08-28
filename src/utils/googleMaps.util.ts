@@ -1,7 +1,7 @@
 import axios from "axios";
 import config from "../config";
 
-const haversineDistance = (
+export const haversineDistance = (
   origin: { lat: number; lng: number },
   destination: { lat: number; lng: number }
 ): number => {

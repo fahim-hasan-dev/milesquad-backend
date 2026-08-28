@@ -4,6 +4,7 @@ import catchAsync from "../../../shared/catchAsync";
 import sendResponse from "../../../shared/sendResponse";
 import { ParcelServices } from "./parcel.service";
 import { JwtPayload } from "jsonwebtoken";
+import ExcelJS from "exceljs";
 
 const createParcel = catchAsync(async (req: Request, res: Response) => {
     const user = req.user as JwtPayload;
@@ -205,6 +206,72 @@ const getCurrentActiveParcel = catchAsync(async (req: Request, res: Response) =>
     });
 });
 
+const exportParcels = catchAsync(async (req: Request, res: Response) => {
+    const formattedData = await ParcelServices.exportParcelsData(req.query);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Milesquad Admin";
+    workbook.created = new Date();
+
+    const worksheet = workbook.addWorksheet("Deliveries Report");
+
+    if (formattedData.length > 0) {
+        const headers = Object.keys(formattedData[0]);
+
+        // Header row
+        const headerRow = worksheet.addRow(headers);
+        headerRow.height = 26;
+
+        // Emerald Green Header Style
+        headerRow.eachCell((cell) => {
+            cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFF" } };
+            cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "10B981" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+            cell.border = {
+                top: { style: "thin", color: { argb: "059669" } },
+                bottom: { style: "medium", color: { argb: "047857" } },
+            };
+        });
+
+        // Data rows
+        formattedData.forEach((dataObj) => {
+            const row = worksheet.addRow(Object.values(dataObj));
+            row.height = 20;
+            row.eachCell((cell) => {
+                cell.alignment = { vertical: "middle", horizontal: "left" };
+            });
+        });
+
+        // Auto-fit column width based on max text length + padding!
+        worksheet.columns.forEach((column) => {
+            let maxLen = 14;
+            column.eachCell?.({ includeEmpty: true }, (cell) => {
+                const val = cell.value !== null && cell.value !== undefined ? String(cell.value) : "";
+                if (val.length > maxLen) {
+                    maxLen = val.length;
+                }
+            });
+            column.width = Math.min(Math.max(maxLen + 4, 14), 60);
+        });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="deliveries_export_${Date.now()}.xlsx"`
+    );
+    res.status(StatusCodes.OK).send(buffer);
+});
+
 export const ParcelController = {
     createParcel,
     selectPaymentMethod,
@@ -221,4 +288,5 @@ export const ParcelController = {
     downloadInvoice,
     getAvailableDriversForParcel,
     getCurrentActiveParcel,
+    exportParcels,
 };
