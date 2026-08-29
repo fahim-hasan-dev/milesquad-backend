@@ -17,17 +17,10 @@ export const haversineDistance = (
   return R * c;
 };
 
-const secondsToText = (seconds: number): string => {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return `${hours} hour${hours > 1 ? "s" : ""} ${minutes} min`;
-  return `${minutes} min`;
-};
-
 export const getDistanceAndDuration = async (
   origin: { lat: number; lng: number },
   destination: { lat: number; lng: number }
-): Promise<{ distanceKm: number; durationText: string; source: "google" | "haversine" }> => {
+): Promise<{ distanceKm: number; durationMinutes: number; source: "google" | "haversine" }> => {
   try {
     const response = await axios.get(
       "https://maps.googleapis.com/maps/api/distancematrix/json",
@@ -45,9 +38,11 @@ export const getDistanceAndDuration = async (
     const element = data?.rows?.[0]?.elements?.[0];
 
     if (data.status === "OK" && element?.status === "OK") {
+      const durationSeconds = element.duration.value;
+      const durationMinutes = Math.max(1, Math.round(durationSeconds / 60));
       return {
         distanceKm: element.distance.value / 1000,
-        durationText: element.duration.text,
+        durationMinutes,
         source: "google",
       };
     }
@@ -57,10 +52,11 @@ export const getDistanceAndDuration = async (
 
   const distanceKm = haversineDistance(origin, destination);
   const estimatedSeconds = (distanceKm / 40) * 3600;
+  const durationMinutes = Math.max(1, Math.round(estimatedSeconds / 60));
 
   return {
     distanceKm: Math.round(distanceKm * 100) / 100,
-    durationText: secondsToText(estimatedSeconds),
+    durationMinutes,
     source: "haversine",
   };
 };

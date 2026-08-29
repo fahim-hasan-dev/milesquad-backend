@@ -92,7 +92,7 @@ const requestPayout = async (
         );
     }
 
-    const transactionId = `POUT-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const transactionId = await getNextCustomId("TXN");
 
     const transaction = await Transaction.create({
         transactionId,
@@ -181,6 +181,53 @@ const updatePayoutStatus = async (
     return transaction;
 };
 
+const exportTransactionsData = async (query: Record<string, any>) => {
+    const { startDate, endDate, status, type, filter } = query;
+
+    const filterObj: Record<string, any> = {};
+
+    if (type) {
+        filterObj.type = new RegExp(`^${type.trim()}$`, "i");
+    }
+
+    if (startDate || endDate) {
+        filterObj.createdAt = {};
+        if (startDate) {
+            filterObj.createdAt.$gte = new Date(startDate);
+        }
+        if (endDate) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            filterObj.createdAt.$lte = end;
+        }
+    }
+
+    const statusVal = filter || status;
+    if (statusVal && statusVal.toUpperCase() !== "ALL") {
+        filterObj.status = new RegExp(`^${statusVal.trim()}$`, "i");
+    }
+
+    const transactions = await Transaction.find(filterObj)
+        .populate("user parcel")
+        .sort({ createdAt: -1 });
+
+    return transactions.map((tx: any) => {
+        return {
+            "Transaction ID": tx.transactionId || `#${tx._id.toString().slice(-6).toUpperCase()}`,
+            "Date": tx.createdAt ? new Date(tx.createdAt).toISOString().replace("T", " ").substring(0, 19) : "",
+            "User Name": tx.user?.fullName || "N/A",
+            "User Email": tx.user?.email || "N/A",
+            "User Phone": tx.user?.phone || "N/A",
+            "Parcel ID": tx.parcel?.parcelId || (tx.parcel?._id ? `#${tx.parcel._id.toString().slice(-6).toUpperCase()}` : "N/A"),
+            "Type": (tx.type || "").toUpperCase(),
+            "Amount ($)": tx.amount || 0,
+            "Payment Method": (tx.paymentMethod || "N/A").replace(/_/g, " ").toUpperCase(),
+            "Status": (tx.status || "").toUpperCase(),
+            "Description": tx.description || tx.accountDetails || "N/A",
+        };
+    });
+};
+
 export const TransactionService = {
     createTransaction,
     getMyTransactions,
@@ -188,4 +235,5 @@ export const TransactionService = {
     getSingleTransaction,
     requestPayout,
     updatePayoutStatus,
+    exportTransactionsData,
 };

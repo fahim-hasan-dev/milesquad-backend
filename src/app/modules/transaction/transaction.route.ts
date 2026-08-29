@@ -27,6 +27,12 @@ router.get(
 );
 
 router.get(
+    "/export",
+    auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+    TransactionController.exportTransactions
+);
+
+router.get(
     "/:id",
     auth(USER_ROLES.DRIVER, USER_ROLES.CUSTOMER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     TransactionController.getSingleTransaction

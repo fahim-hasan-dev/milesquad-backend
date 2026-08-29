@@ -41,6 +41,12 @@ router.delete(
   UserController.deleteMyAccount,
 );
 
+router.get(
+  '/export',
+  auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
+  UserController.exportUsers,
+);
+
 router.get('/:id', UserController.getSingleUser);
 
 router.delete(

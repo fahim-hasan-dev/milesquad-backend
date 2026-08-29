@@ -59,13 +59,21 @@ const ParcelSchema = new Schema<IParcel>(
             type: String,
             default: "",
         },
-        distance: {
+        dropDistance: {
             type: Number,
-            required: true,
+            default: 0,
         },
-        duration: {
-            type: String,
-            required: true,
+        dropDuration: {
+            type: Number,
+            default: 0,
+        },
+        pickUpDistance: {
+            type: Number,
+            default: 0,
+        },
+        pickUpDuration: {
+            type: Number,
+            default: 0,
         },
         // Measurements & Factors
         volume: { type: Number, default: 0 },
@@ -120,6 +128,9 @@ const ParcelSchema = new Schema<IParcel>(
         isDriverAssigned: {
             type: Boolean,
             default: false,
+        },
+        driverAssignedAt: {
+            type: Date,
         },
         driver: {
             type: Schema.Types.ObjectId,

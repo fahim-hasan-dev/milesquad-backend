@@ -38,8 +38,10 @@ export type IParcel = {
     vehicleType: VEHICLE_TYPE;
     images?: string[];
     pdfDocument?: string;
-    distance: number;
-    duration: string;
+    dropDistance: number;
+    dropDuration: number;
+    pickUpDistance?: number;
+    pickUpDuration?: number;
     volume: number;
     volumeUtilization: number;
     weightUtilization: number;
@@ -65,9 +67,10 @@ export type IParcel = {
     deliveryDate: Date;
     receiverPhone: string;
     isDriverAssigned: boolean;
+    driverAssignedAt?: Date;
     driver?: Types.ObjectId;
     partner?: Types.ObjectId;
-    status: PARCEL_STATUS;
+    status: PARCEL_STATUS; 
     statusProgress?: IStatusProgress;
     note?: string;
     pickedUpAt?: Date;

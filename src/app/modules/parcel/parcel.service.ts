@@ -22,6 +22,7 @@ import { User } from "../user/user.model";
 import { Partner } from "../partner/partner.model";
 import { emailHelper } from "../../../helpers/emailHelper";
 import { Transaction } from "../transaction/transaction.model";
+import { getNextCustomId } from "../counter/counter.model";
 import { TRANSACTION_STATUS, TRANSACTION_TYPE } from "../../../enum/transaction";
 import config from "../../../config";
 import { generateInvoiceHTML, generateInvoicePDFBuffer } from "../../../helpers/invoiceHelper";
@@ -30,6 +31,7 @@ import {
     updateStatusProgress,
     notifyNearbyDriversOfNewParcel,
     notifyNearbyDriversOfRemovedParcel,
+    calculatePickUpMetrics,
 } from "./parcel.utils";
 
 const getOrCalculateParcelDistance = async (query: Record<string, any>) => {
@@ -51,7 +53,7 @@ const getOrCalculateParcelDistance = async (query: Record<string, any>) => {
         throw new ApiError(StatusCodes.BAD_REQUEST, "Coordinates must be valid numbers.");
     }
 
-    const distanceCacheKey = `dist_cache:${pickupLatitude.toFixed(5)}:${pickupLongitude.toFixed(5)}:${dropLatitude.toFixed(5)}:${dropLongitude.toFixed(5)}`;
+    const distanceCacheKey = `dist_cache_v2:${pickupLatitude.toFixed(5)}:${pickupLongitude.toFixed(5)}:${dropLatitude.toFixed(5)}:${dropLongitude.toFixed(5)}`;
     const cachedDistanceData = await redisClient.get(distanceCacheKey);
     let calculatedDistance;
 
@@ -65,16 +67,17 @@ const getOrCalculateParcelDistance = async (query: Record<string, any>) => {
         await redisClient.set(distanceCacheKey, JSON.stringify(calculatedDistance), "EX", 3600);
     }
 
+    const durationMins = typeof calculatedDistance.durationMinutes === 'number' && !isNaN(calculatedDistance.durationMinutes)
+        ? calculatedDistance.durationMinutes
+        : (typeof calculatedDistance.durationText === 'string' ? parseFloat(calculatedDistance.durationText) || 1 : 1);
+
     return {
-        distanceKm: calculatedDistance.distanceKm,
-        duration: calculatedDistance.durationText,
+        distanceKm: Number(calculatedDistance.distanceKm || 0),
+        dropDuration: Math.max(1, durationMins),
     };
 };
 
 const createParcel = async (payload: IParcel, user: JwtPayload) => {
-    delete (payload as any).distance;
-    delete (payload as any).duration;
-
     payload.deliveryDate = new Date(payload.deliveryDate);
 
     const calculatedDistanceData = await getOrCalculateParcelDistance({
@@ -84,8 +87,8 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
         dropLng: payload.dropLocation.coordinates[0],
     });
 
-    payload.distance = calculatedDistanceData.distanceKm;
-    payload.duration = calculatedDistanceData.duration;
+    payload.dropDistance = calculatedDistanceData.distanceKm;
+    payload.dropDuration = calculatedDistanceData.dropDuration;
 
     const systemSettings = await SettingServices.getSettings();
     if (!systemSettings) {
@@ -131,8 +134,8 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
     const calculatedPricing = calculateParcelPricing({
         dimension: payload.dimension,
         totalWeight: payload.totalWeight,
-        distanceKm: payload.distance,
-        durationText: payload.duration,
+        distanceKm: payload.dropDistance,
+        dropDuration: payload.dropDuration,
         itemValue: payload.itemValue,
         fareSetting: selectedVehicleFareSettings,
         isScheduled: isScheduledDelivery,
@@ -411,7 +414,7 @@ const getNearbyParcels = async (
                 vehicleType: 1,
                 pickupLocation: 1,
                 dropLocation: 1,
-                distance: 1,
+                dropDistance: 1,
                 distanceFromDriver: 1,
                 deliveryDate: 1,
                 sender: 1,
@@ -485,15 +488,30 @@ const acceptParcel = async (parcelId: string, driverId: string) => {
 
     const updatedProgress = updateStatusProgress(parcel.statusProgress, PARCEL_STATUS.ON_THE_WAY_TO_PICKUP);
 
+    const pickUpMetrics = await calculatePickUpMetrics(
+        driverId,
+        parcel.pickupLocation?.coordinates
+    );
+
+    const updateFields: Record<string, any> = {
+        driver: driverId,
+        partner: null,
+        isDriverAssigned: true,
+        driverAssignedAt: new Date(),
+        status: PARCEL_STATUS.ON_THE_WAY_TO_PICKUP,
+        statusProgress: updatedProgress,
+    };
+
+    if (pickUpMetrics.pickUpDistance > 0) {
+        updateFields.pickUpDistance = pickUpMetrics.pickUpDistance;
+    }
+    if (pickUpMetrics.pickUpDuration) {
+        updateFields.pickUpDuration = pickUpMetrics.pickUpDuration;
+    }
+
     const updatedParcel = await Parcel.findByIdAndUpdate(
         parcelId,
-        {
-            driver: driverId,
-            partner: null,
-            isDriverAssigned: true,
-            status: PARCEL_STATUS.ON_THE_WAY_TO_PICKUP,
-            statusProgress: updatedProgress,
-        },
+        updateFields,
         { new: true }
     ).populate("sender driver partner");
 
@@ -662,7 +680,7 @@ const updateParcel = async (
 
                 try {
                     await Transaction.create({
-                        transactionId: `WCR-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+                        transactionId: await getNextCustomId("TXN"),
                         user: parcel.driver,
                         parcel: parcel._id,
                         amount: driverPayout,
@@ -850,6 +868,7 @@ const assignParcelByAdmin = async (
 
     const updateData: Record<string, any> = {
         isDriverAssigned: true,
+        driverAssignedAt: new Date(),
         status: PARCEL_STATUS.RIDER_ASSIGNED,
     };
 
@@ -869,6 +888,19 @@ const assignParcelByAdmin = async (
         }
         updateData.driver = assigneeId;
         updateData.partner = null;
+
+        if (type === 'driver' && assigneeId && parcel.pickupLocation?.coordinates) {
+            const pickUpMetrics = await calculatePickUpMetrics(
+                assigneeId,
+                parcel.pickupLocation.coordinates
+            );
+            if (pickUpMetrics.pickUpDistance > 0) {
+                updateData.pickUpDistance = pickUpMetrics.pickUpDistance;
+            }
+            if (pickUpMetrics.pickUpDuration) {
+                updateData.pickUpDuration = pickUpMetrics.pickUpDuration;
+            }
+        }
     }
 
     const updatedProgress = updateStatusProgress(parcel.statusProgress, PARCEL_STATUS.RIDER_ASSIGNED);
@@ -1141,6 +1173,7 @@ const exportParcelsData = async (query: Record<string, any>) => {
             "Order ID": parcel.parcelId || `#${parcel._id.toString().slice(-6).toUpperCase()}`,
             "Created Date": parcel.createdAt ? new Date(parcel.createdAt).toISOString().replace("T", " ").substring(0, 19) : "",
             "Delivery Date": parcel.deliveryDate ? new Date(parcel.deliveryDate).toISOString().substring(0, 10) : "",
+            "Driver Assigned Date": parcel.driverAssignedAt ? new Date(parcel.driverAssignedAt).toISOString().replace("T", " ").substring(0, 19) : "N/A",
             "Status": (parcel.status || "").replace(/_/g, " ").toUpperCase(),
             "Good Type": parcel.goodType || "N/A",
             "Vehicle Type": (parcel.vehicleType || "N/A").toUpperCase(),
@@ -1157,8 +1190,10 @@ const exportParcelsData = async (query: Record<string, any>) => {
             "Pickup Address": pickupAddr,
             "Dropoff Address": dropAddr,
             "Receiver Phone": parcel.receiverPhone || "N/A",
-            "Distance (km)": parcel.distance || 0,
-            "Duration": parcel.duration || "N/A",
+            "Drop Distance (km)": parcel.dropDistance || parcel.distance || 0,
+            "Drop Duration (mins)": parcel.dropDuration || 0,
+            "Pickup Distance (km)": parcel.pickUpDistance || 0,
+            "Pickup Duration (mins)": parcel.pickUpDuration || 0,
             "Item Value ($)": parcel.itemValue || 0,
             "Base Fee ($)": parcel.baseFee || 0,
             "Fuel Cost ($)": parcel.fuelCost || 0,

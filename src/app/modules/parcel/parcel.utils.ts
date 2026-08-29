@@ -4,8 +4,39 @@ import { PARCEL_STATUS } from "../../../enum/parcel";
 import { getIO } from "../../../helpers/socketManager";
 import { logger } from "../../../shared/logger";
 import { trackingService } from "../../../helpers/trackingService";
-import { haversineDistance } from "../../../utils/googleMaps.util";
+import { haversineDistance, getDistanceAndDuration } from "../../../utils/googleMaps.util";
 import { User } from "../user/user.model";
+
+export const calculatePickUpMetrics = async (
+    driverId: string,
+    pickupCoordinates: [number, number]
+): Promise<{ pickUpDistance: number; pickUpDuration: number }> => {
+    try {
+        const driverLoc = await trackingService.getSingleDriverLocationById(driverId);
+        if (
+            driverLoc &&
+            typeof driverLoc.lat === "number" &&
+            typeof driverLoc.lng === "number" &&
+            pickupCoordinates &&
+            pickupCoordinates.length === 2
+        ) {
+            const driverCoords = { lat: driverLoc.lat, lng: driverLoc.lng };
+            const pickupCoords = {
+                lat: pickupCoordinates[1],
+                lng: pickupCoordinates[0],
+            };
+
+            const routeInfo = await getDistanceAndDuration(driverCoords, pickupCoords);
+            return {
+                pickUpDistance: routeInfo.distanceKm || 0,
+                pickUpDuration: routeInfo.durationMinutes || 0,
+            };
+        }
+    } catch (err) {
+        logger.warn("Failed to calculate pickUpMetrics:", err);
+    }
+    return { pickUpDistance: 0, pickUpDuration: 0 };
+};
 
 export const emitParcelStatusUpdate = (parcel: any) => {
     try {

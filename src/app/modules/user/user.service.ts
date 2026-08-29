@@ -187,6 +187,82 @@ const getDriverLiveLocation = async (driverId: string) => {
     return await trackingService.getSingleDriverLocationById(driverId);
 };
 
+const exportUsersData = async (query: Record<string, any>) => {
+    const { startDate, endDate, status, role, filter } = query;
+
+    const filterObj: Record<string, any> = {
+        status: { $nin: ["deleted", "DELETED", USER_STATUS.DELETED] },
+    };
+
+    const isDriverExport = role?.toLowerCase() === USER_ROLES.DRIVER;
+
+    if (role) {
+        filterObj.role = new RegExp(`^${role.trim()}$`, "i");
+    }
+
+    if (startDate || endDate) {
+        filterObj.createdAt = {};
+        if (startDate) {
+            filterObj.createdAt.$gte = new Date(startDate);
+        }
+        if (endDate) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            filterObj.createdAt.$lte = end;
+        }
+    }
+
+    const statusVal = filter || status;
+    if (statusVal && statusVal.toUpperCase() !== "ALL") {
+        const sLower = statusVal.trim().toLowerCase();
+        if (sLower === "suspended" || sLower === "restricted") {
+            filterObj.status = USER_STATUS.RESTRICTED;
+        } else if (sLower === "active") {
+            filterObj.status = USER_STATUS.ACTIVE;
+        } else if (sLower === "pending") {
+            if (isDriverExport) {
+                filterObj["driverInfo.profileVerification"] = {
+                    $in: [
+                        PROFILE_VERIFICATION_STATUS.PENDING,
+                        PROFILE_VERIFICATION_STATUS.RESUBMITTED,
+                        PROFILE_VERIFICATION_STATUS.REJECTED,
+                    ],
+                };
+            } else {
+                filterObj.status = USER_STATUS.PENDING;
+            }
+        } else {
+            filterObj.status = new RegExp(`^${statusVal.trim()}$`, "i");
+        }
+    }
+
+    const users = await User.find(filterObj).sort({ createdAt: -1 });
+
+    return users.map((user: any) => {
+        const baseObj: Record<string, any> = {
+            "ID": user.userId || `#${user._id.toString().slice(-6).toUpperCase()}`,
+            "Full Name": user.fullName || "N/A",
+            "Email": user.email || "N/A",
+            "Phone": user.phone || "N/A",
+            "Role": (user.role || "customer").toUpperCase(),
+            "Status": (user.status || "active").toUpperCase(),
+            "Email Verified": user.isEmailVerified ? "Yes" : "No",
+            "Phone Verified": user.isPhoneVerified ? "Yes" : "No",
+        };
+
+        if (isDriverExport || user.role === USER_ROLES.DRIVER) {
+            baseObj["Vehicle Type"] = (user.driverInfo?.vehicleType || "N/A").toUpperCase();
+            baseObj["Verification Status"] = (user.driverInfo?.profileVerification || "PENDING").toUpperCase();
+            baseObj["Average Rating"] = user.driverInfo?.averageRating || 0;
+            baseObj["Wallet Balance ($)"] = user.driverInfo?.wallet || 0;
+        }
+
+        baseObj["Joined Date"] = user.createdAt ? new Date(user.createdAt).toISOString().substring(0, 10) : "";
+
+        return baseObj;
+    });
+};
+
 export const UserServices = {
     updateProfile,
     getAllUser,
@@ -196,4 +272,5 @@ export const UserServices = {
     deleteMyAccount,
     approveDriverProfile,
     getDriverLiveLocation,
+    exportUsersData,
 };

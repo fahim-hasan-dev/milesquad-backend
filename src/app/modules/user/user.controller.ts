@@ -6,6 +6,7 @@ import { UserServices } from './user.service'
 import { IUser } from './user.interface'
 import config from '../../../config'
 import { JwtPayload } from 'jsonwebtoken'
+import ExcelJS from 'exceljs'
 
 
 
@@ -87,6 +88,71 @@ const approveDriverProfile = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const exportUsers = catchAsync(async (req: Request, res: Response) => {
+    const formattedData = await UserServices.exportUsersData(req.query);
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Milesquad Admin";
+    workbook.created = new Date();
+
+    const sheetName = req.query.role?.toString().toUpperCase() === "DRIVER" ? "Riders Report" : "Users Report";
+    const worksheet = workbook.addWorksheet(sheetName);
+
+    if (formattedData.length > 0) {
+        const headers = Object.keys(formattedData[0]);
+
+        const headerRow = worksheet.addRow(headers);
+        headerRow.height = 26;
+
+        headerRow.eachCell((cell) => {
+            cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFF" } };
+            cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "10B981" },
+            };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+            cell.border = {
+                top: { style: "thin", color: { argb: "059669" } },
+                bottom: { style: "medium", color: { argb: "047857" } },
+            };
+        });
+
+        formattedData.forEach((dataObj) => {
+            const row = worksheet.addRow(Object.values(dataObj));
+            row.height = 20;
+            row.eachCell((cell) => {
+                cell.alignment = { vertical: "middle", horizontal: "left" };
+            });
+        });
+
+        worksheet.columns.forEach((column) => {
+            let maxLen = 14;
+            column.eachCell?.({ includeEmpty: true }, (cell) => {
+                const val = cell.value !== null && cell.value !== undefined ? String(cell.value) : "";
+                if (val.length > maxLen) {
+                    maxLen = val.length;
+                }
+            });
+            column.width = Math.min(Math.max(maxLen + 4, 14), 60);
+        });
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    const prefix = req.query.role?.toString().toUpperCase() === "DRIVER" ? "riders_export" : "users_export";
+
+    res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${prefix}_${Date.now()}.xlsx"`
+    );
+    res.status(StatusCodes.OK).send(buffer);
+});
+
 export const UserController = {
   getAllUser,
   updateProfile,
@@ -95,4 +161,5 @@ export const UserController = {
   getProfile,
   deleteMyAccount,
   approveDriverProfile,
+  exportUsers,
 }

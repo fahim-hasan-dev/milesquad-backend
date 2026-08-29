@@ -9,6 +9,7 @@ import { Payment } from '../app/modules/payment/payment.model'
 import { Parcel } from '../app/modules/parcel/parcel.model'
 import { PARCEL_STATUS } from '../enum/parcel'
 import { Transaction } from '../app/modules/transaction/transaction.model'
+import { getNextCustomId } from '../app/modules/counter/counter.model'
 import { TRANSACTION_STATUS, TRANSACTION_TYPE } from '../enum/transaction'
 import { User } from '../app/modules/user/user.model'
 import { emailHelper } from '../helpers/emailHelper'
@@ -67,7 +68,7 @@ const handleStripeWebhook = async (req: Request, res: Response) => {
 
                             try {
                                 await Transaction.create({
-                                    transactionId: session.payment_intent as string || session.id,
+                                    transactionId: await getNextCustomId("TXN"),
                                     user: parcel.sender,
                                     parcel: parcel._id,
                                     amount: (session.amount_total || 0) / 100,
