@@ -23,7 +23,7 @@ const updateSettingZodSchema = z.object({
             tricycle: fareSettingValidation,
             car: fareSettingValidation,
             van: fareSettingValidation,
-            truck: fareSettingValidation,
+            small_cargo: fareSettingValidation,
         }).optional(),
     }),
 });

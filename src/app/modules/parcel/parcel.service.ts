@@ -96,7 +96,7 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
         throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Pricing settings not configured.");
     }
 
-    const selectedVehicleType = payload.vehicleType.toLowerCase() as 'motorcycle' | 'tricycle' | 'car' | 'van' | 'truck';
+    const selectedVehicleType = payload.vehicleType.toLowerCase() as keyof typeof systemSettings.fareSettings;
     const allFareSettings = systemSettings.fareSettings || {} as any;
     const selectedVehicleFareSettings = allFareSettings[selectedVehicleType];
 
@@ -1267,14 +1267,14 @@ const exportParcelsData = async (query: Record<string, any>) => {
             "Drop Duration (mins)": parcel.dropDuration || 0,
             "Pickup Distance (km)": parcel.pickUpDistance || 0,
             "Pickup Duration (mins)": parcel.pickUpDuration || 0,
-            "Item Value ($)": parcel.itemValue || 0,
-            "Base Fee ($)": parcel.baseFee || 0,
-            "Fuel Cost ($)": parcel.fuelCost || 0,
-            "Time Cost ($)": parcel.timeCost || 0,
-            "Service Fee ($)": parcel.serviceFee || 0,
-            "Goods Risk ($)": parcel.goodRisks || 0,
-            "Overhead ($)": parcel.overhead || 0,
-            "Total To Pay ($)": parcel.totalToPay || parcel.totalDeliveryFee || 0,
+            "Item Value (XOF)": parcel.itemValue || 0,
+            "Base Fee (XOF)": parcel.baseFee || 0,
+            "Fuel Cost (XOF)": parcel.fuelCost || 0,
+            "Time Cost (XOF)": parcel.timeCost || 0,
+            "Service Fee (XOF)": parcel.serviceFee || 0,
+            "Goods Risk (XOF)": parcel.goodRisks || 0,
+            "Overhead (XOF)": parcel.overhead || 0,
+            "Total To Pay (XOF)": parcel.totalToPay || parcel.totalDeliveryFee || 0,
             "Payment Method": (parcel.paymentMethod || "ONLINE").replace(/_/g, " ").toUpperCase(),
             "Note": parcel.note || "",
         };

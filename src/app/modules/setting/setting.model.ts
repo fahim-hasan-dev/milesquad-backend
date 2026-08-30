@@ -23,7 +23,7 @@ const SettingSchema = new Schema<ISetting>({
         tricycle: { type: FareSettingSubSchema, default: () => ({}) },
         car: { type: FareSettingSubSchema, default: () => ({}) },
         van: { type: FareSettingSubSchema, default: () => ({}) },
-        truck: { type: FareSettingSubSchema, default: () => ({}) },
+        small_cargo: { type: FareSettingSubSchema, default: () => ({}) },
     },
 }, {
     timestamps: true,

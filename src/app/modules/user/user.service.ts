@@ -294,7 +294,7 @@ const exportUsersData = async (query: Record<string, any>) => {
             baseObj["Vehicle Type"] = (user.driverInfo?.vehicleType || "N/A").toUpperCase();
             baseObj["Verification Status"] = (user.driverInfo?.profileVerification || "PENDING").toUpperCase();
             baseObj["Average Rating"] = user.driverInfo?.averageRating || 0;
-            baseObj["Wallet Balance ($)"] = user.driverInfo?.wallet || 0;
+            baseObj["Wallet Balance (XOF)"] = user.driverInfo?.wallet || 0;
         }
 
         baseObj["Joined Date"] = user.createdAt ? new Date(user.createdAt).toISOString().substring(0, 10) : "";

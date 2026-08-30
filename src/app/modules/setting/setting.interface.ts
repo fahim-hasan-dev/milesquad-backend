@@ -20,6 +20,6 @@ export type ISetting = {
         tricycle: IFareSetting;
         car: IFareSetting;
         van: IFareSetting;
-        truck: IFareSetting;
+        small_cargo: IFareSetting;
     };
 };

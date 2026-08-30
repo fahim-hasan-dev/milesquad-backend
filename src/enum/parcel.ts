@@ -15,7 +15,7 @@ export enum VEHICLE_TYPE {
     TRICYCLE = 'tricycle',
     VAN = 'van',
     CAR = 'car',
-    TRUCK = 'truck'
+    SMALL_CARGO = 'small_cargo'
 }
 
 export enum PAYMENT_METHOD {

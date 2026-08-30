@@ -224,7 +224,7 @@ const exportTransactionsData = async (query: Record<string, any>) => {
             "User Phone": tx.user?.phone || "N/A",
             "Parcel ID": tx.parcel?.parcelId || (tx.parcel?._id ? `#${tx.parcel._id.toString().slice(-6).toUpperCase()}` : "N/A"),
             "Type": (tx.type || "").toUpperCase(),
-            "Amount ($)": tx.amount || 0,
+            "Amount (XOF)": tx.amount || 0,
             "Payment Method": (tx.paymentMethod || "N/A").replace(/_/g, " ").toUpperCase(),
             "Status": (tx.status || "").toUpperCase(),
             "Description": tx.description || tx.accountDetails || "N/A",
