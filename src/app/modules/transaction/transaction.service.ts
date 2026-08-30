@@ -7,8 +7,8 @@ import { Transaction } from "./transaction.model";
 import { User } from "../user/user.model";
 import { USER_ROLES } from "../../../enum/user";
 import { NotificationService } from "../notification/notification.service";
-
 import { getNextCustomId } from "../counter/counter.model";
+import { cacheDel } from "../../../helpers/cacheHelper";
 
 const createTransaction = async (payload: Partial<ITransaction>) => {
     if (!payload.transactionId) {
@@ -145,6 +145,10 @@ const updatePayoutStatus = async (
         await User.findByIdAndUpdate(driver._id, {
             $inc: { 'driverInfo.wallet': -transaction.amount },
         });
+
+        // Invalidate driver profile cache
+        const driverIdStr = driver._id.toString();
+        await cacheDel(`cache:user:profile:${driverIdStr}`, `cache:user:single:${driverIdStr}`);
 
         transaction.status = TRANSACTION_STATUS.COMPLETED;
         await transaction.save();

@@ -12,6 +12,7 @@ import { trackingService } from "../../../helpers/trackingService";
 import { getDistanceAndDuration } from "../../../utils/googleMaps.util";
 import { SettingServices } from "../setting/setting.service";
 import { redisClient } from "../../../helpers/redis";
+import { cacheDel, cacheDelByPattern } from "../../../helpers/cacheHelper";
 import { createPaymentSession } from "../../../stripe/createPaymentSession";
 import { JwtPayload } from "jsonwebtoken";
 import { NotificationService } from "../notification/notification.service";
@@ -263,7 +264,7 @@ const selectPaymentMethod = async (
 };
 
 const getAllParcels = async (query: Record<string, unknown>) => {
-    const defaultFields = "parcelId goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
+    const defaultFields = "parcelId goodType status totalDeliveryFee totalToPay totalPrice itemValue vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
     const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
 
     const extraOrConditions: any[] = [];
@@ -271,11 +272,16 @@ const getAllParcels = async (query: Record<string, unknown>) => {
         const term = query.searchTerm.trim();
         const searchRegex = { $regex: term, $options: "i" };
 
+        if (Types.ObjectId.isValid(term)) {
+            extraOrConditions.push({ _id: term });
+        }
+
         const matchingUsers = await User.find({
             $or: [
                 { fullName: searchRegex },
                 { email: searchRegex },
-                { phone: searchRegex }
+                { phone: searchRegex },
+                { userId: searchRegex }
             ]
         }).select("_id");
         const matchingUserIds = matchingUsers.map(u => u._id);
@@ -284,7 +290,8 @@ const getAllParcels = async (query: Record<string, unknown>) => {
             $or: [
                 { fullName: searchRegex },
                 { email: searchRegex },
-                { phone: searchRegex }
+                { phone: searchRegex },
+                { partnerId: searchRegex }
             ]
         }).select("_id");
         const matchingPartnerIds = matchingPartners.map(p => p._id);
@@ -305,7 +312,7 @@ const getAllParcels = async (query: Record<string, unknown>) => {
         ]),
         query
     )
-        .search(["goodType", "receiverPhone", "parcelId"], extraOrConditions)
+        .search(["parcelId", "goodType", "receiverPhone", "pickupLocation.address", "dropLocation.address"], extraOrConditions)
         .filter()
         .sort()
         .paginate();
@@ -318,6 +325,64 @@ const getAllParcels = async (query: Record<string, unknown>) => {
     return { parcels, meta };
 };
 
+const getUserOrders = async (userId: string, query: Record<string, unknown>) => {
+    let filter: any = {};
+    const isObjectId = Types.ObjectId.isValid(userId);
+
+    if (isObjectId) {
+        filter = {
+            $or: [{ sender: userId }, { driver: userId }],
+            status: { $ne: PARCEL_STATUS.CREATED }
+        };
+    } else {
+        const userObj = await User.findOne({ userId }).select("_id");
+        if (userObj) {
+            filter = {
+                $or: [{ sender: userObj._id }, { driver: userObj._id }],
+                status: { $ne: PARCEL_STATUS.CREATED }
+            };
+        } else {
+            filter = { sender: userId, status: { $ne: PARCEL_STATUS.CREATED } };
+        }
+    }
+
+    const defaultFields = "parcelId goodType status totalDeliveryFee totalToPay totalPrice itemValue vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
+    const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
+
+    const extraOrConditions: any[] = [];
+    if (query.searchTerm && typeof query.searchTerm === "string" && query.searchTerm.trim()) {
+        const term = query.searchTerm.trim();
+        if (Types.ObjectId.isValid(term)) {
+            extraOrConditions.push({ _id: term });
+        }
+    }
+
+    const parcelQuery = new QueryBuilder(
+        Parcel.find(filter).populate([
+            { path: "sender driver", select: "userId fullName phone email image" },
+            { path: "partner", select: "partnerId fullName phone rolePosition email" }
+        ]),
+        query
+    )
+        .search(["parcelId", "goodType", "receiverPhone", "pickupLocation.address", "dropLocation.address"], extraOrConditions)
+        .filter()
+        .sort()
+        .paginate();
+
+    parcelQuery.modelQuery.select(selectedFields).lean();
+
+    const parcels = await parcelQuery.modelQuery;
+    const meta = await parcelQuery.getPaginationInfo();
+
+    const allUserParcels = await Parcel.find(filter).select("totalToPay totalPrice totalDeliveryFee status").lean();
+    let totalSpent = 0;
+    allUserParcels.forEach((p: any) => {
+        totalSpent += Number(p.totalToPay || p.totalPrice || p.totalDeliveryFee || 0);
+    });
+
+    return { parcels, meta, totalOrders: meta.total, totalSpent };
+};
+
 const getMyParcels = async (
     userId: string,
     role: string,
@@ -327,7 +392,7 @@ const getMyParcels = async (
         ? { driver: userId, status: { $ne: PARCEL_STATUS.CREATED } }
         : { sender: userId, status: { $ne: PARCEL_STATUS.CREATED } };
 
-    const defaultFields = "parcelId goodType status totalDeliveryFee vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
+    const defaultFields = "parcelId goodType status totalDeliveryFee totalToPay totalPrice itemValue vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
     const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
 
     const parcelQuery = new QueryBuilder(
@@ -669,6 +734,14 @@ const updateParcel = async (
     } else if (payload.status === PARCEL_STATUS.DELIVERED) {
         payload.deliveredAt = new Date();
         await trackingService.removeDriverTracking(id, parcel.driver!.toString());
+
+        // Invalidate driver stats, driver earnings, user profile, and admin dashboard stats caches
+        if (parcel.driver) {
+            const driverIdStr = parcel.driver.toString();
+            await cacheDel(`cache:driver:stats:${driverIdStr}`, `cache:user:profile:${driverIdStr}`, `cache:user:single:${driverIdStr}`);
+            await cacheDelByPattern(`cache:driver:earnings:${driverIdStr}:*`);
+        }
+        await cacheDelByPattern('cache:admin:stats:*');
 
         // Credit driver's wallet balance if parcel was paid online
         if (parcel.driver && parcel.paymentMethod === PAYMENT_METHOD.ONLINE) {
@@ -1212,6 +1285,7 @@ export const ParcelServices = {
     createParcel,
     selectPaymentMethod,
     getAllParcels,
+    getUserOrders,
     getMyParcels,
     getNearbyParcels,
     acceptParcel,

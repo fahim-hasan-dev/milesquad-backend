@@ -6,6 +6,10 @@ import { Admin } from '../../../app/modules/admin/admin.model'
 import { emailHelper } from '../../../helpers/emailHelper'
 import QueryBuilder from '../../builder/QueryBuilder'
 import { emailTemplate } from '../../../shared/emailTemplate'
+import { cacheDel, cacheDelByPattern, getOrSetCache } from '../../../helpers/cacheHelper'
+
+const CACHE_TTL_PUBLIC = 86400 // 24 hours
+const CACHE_TTL_FAQ = 43200 // 12 hours
 
 const createPublic = async (payload: IPublic) => {
   const isExist = await Public.findOne({
@@ -29,15 +33,28 @@ const createPublic = async (payload: IPublic) => {
       throw new ApiError(StatusCodes.BAD_REQUEST, 'Failed to create Public')
   }
 
+  // Invalidate cache for public content
+  await cacheDel(`cache:public:${payload.type}`)
+
   return `${payload.type} created successfully}`
 }
 
 const getAllPublics = async (type: string) => {
-  const result = await Public.findOne({ type: type }).lean()
-  return result || null
+  return getOrSetCache(
+    `cache:public:${type}`,
+    async () => {
+      const result = await Public.findOne({ type: type }).lean()
+      return result || null
+    },
+    CACHE_TTL_PUBLIC
+  )
 }
 
 const deletePublic = async (id: string) => {
+  const isExist = await Public.findById(id)
+  if (isExist) {
+    await cacheDel(`cache:public:${isExist.type}`)
+  }
   const result = await Public.findByIdAndDelete(id)
   return result
 }
@@ -97,16 +114,26 @@ const createFaq = async (payload: IFaq) => {
   const result = await Faq.create(payload)
   if (!result)
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Failed to create Faq')
+
+  // Invalidate FAQ cache
+  await cacheDelByPattern('cache:public:faqs:*')
   return result
 }
 
 const getAllFaqs = async (query: Record<string, unknown> = {}) => {
-  const filter: Record<string, any> = {}
-  if (query.target) {
-    filter.target = { $in: [query.target, 'all'] }
-  }
-  const result = await Faq.find(filter)
-  return result || []
+  const targetKey = query.target ? String(query.target) : 'all'
+  return getOrSetCache(
+    `cache:public:faqs:${targetKey}`,
+    async () => {
+      const filter: Record<string, any> = {}
+      if (query.target) {
+        filter.target = { $in: [query.target, 'all'] }
+      }
+      const result = await Faq.find(filter)
+      return result || []
+    },
+    CACHE_TTL_FAQ
+  )
 }
 
 const getSingleFaq = async (id: string) => {
@@ -126,6 +153,9 @@ const updateFaq = async (id: string, payload: Partial<IFaq>) => {
       new: true,
     },
   )
+
+  // Invalidate FAQ cache
+  await cacheDelByPattern('cache:public:faqs:*')
   return result
 }
 
@@ -135,6 +165,9 @@ const deleteFaq = async (id: string) => {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Faq not found')
   }
   const result = await Faq.findByIdAndDelete(id)
+
+  // Invalidate FAQ cache
+  await cacheDelByPattern('cache:public:faqs:*')
   return result
 }
 

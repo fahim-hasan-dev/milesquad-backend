@@ -1,5 +1,6 @@
 import { redisClient } from './redis';
 import { logger } from '../shared/logger';
+import { User } from '../app/modules/user/user.model';
 
 const updateDriverLocation = async (
     parcelId: string,
@@ -60,8 +61,24 @@ const getSingleDriverLocationById = async (driverId: string) => {
     const data = await redisClient.hgetall(`driver:info:${driverId}`);
     if (!data || !data.lat || !data.lng) return null;
 
+    let userDetails: any = null;
+    try {
+        if (driverId && driverId.length === 24) {
+            userDetails = await User.findById(driverId).select("fullName phone email image vehicleType rating userId").lean();
+        }
+    } catch {
+        // ignore error
+    }
+
     return {
         driverId,
+        customId: userDetails?.userId || driverId,
+        fullName: userDetails?.fullName || 'Driver',
+        phone: userDetails?.phone || 'N/A',
+        email: userDetails?.email || 'N/A',
+        image: userDetails?.image || null,
+        vehicleType: userDetails?.vehicleType || 'BIKE',
+        rating: userDetails?.rating || 5.0,
         lat: parseFloat(data.lat),
         lng: parseFloat(data.lng),
         status: data.status || 'ONLINE',

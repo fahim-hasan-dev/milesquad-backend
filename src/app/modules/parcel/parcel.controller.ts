@@ -29,6 +29,18 @@ const getAllParcels = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getUserOrders = catchAsync(async (req: Request, res: Response) => {
+    const { userId } = req.params;
+    const result = await ParcelServices.getUserOrders(userId, req.query);
+
+    sendResponse(res, {
+        statusCode: StatusCodes.OK,
+        success: true,
+        message: "User order history fetched successfully",
+        data: result,
+    });
+});
+
 const getMyParcels = catchAsync(async (req: Request, res: Response) => {
     const user = req.user as JwtPayload;
     const userId = user.authId || user.id;
@@ -276,6 +288,7 @@ export const ParcelController = {
     createParcel,
     selectPaymentMethod,
     getAllParcels,
+    getUserOrders,
     getMyParcels,
     getNearbyParcels,
     acceptParcel,

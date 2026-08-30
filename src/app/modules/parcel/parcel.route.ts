@@ -85,6 +85,12 @@ router.get(
 );
 
 router.get(
+    "/user-orders/:userId",
+    auth(ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN, USER_ROLES.CUSTOMER, USER_ROLES.DRIVER),
+    ParcelController.getUserOrders
+);
+
+router.get(
     "/:id",
     auth(USER_ROLES.DRIVER, USER_ROLES.CUSTOMER, ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.SUB_ADMIN),
     ParcelController.getSingleParcel

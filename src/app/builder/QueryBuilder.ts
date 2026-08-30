@@ -11,13 +11,16 @@ class QueryBuilder<T> {
 
   // Searching
   search(searchableFields: string[], extraOrConditions: any[] = []) {
-    if (this?.query?.searchTerm) {
-      const term = this.query.searchTerm as string
+    if (this?.query?.searchTerm && typeof this.query.searchTerm === 'string') {
+      const term = (this.query.searchTerm as string).trim()
+      if (!term) return this
+
+      const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const baseConditions = searchableFields.map(
         field =>
           ({
             [field]: {
-              $regex: term,
+              $regex: escapedTerm,
               $options: 'i',
             },
           }) as FilterQuery<T>,
@@ -27,8 +30,8 @@ class QueryBuilder<T> {
 
       if (allOrConditions.length > 0) {
         this.modelQuery = this.modelQuery.find({
-          $or: allOrConditions,
-        })
+          $and: [{ $or: allOrConditions }],
+        } as FilterQuery<T>)
       }
     }
     return this
@@ -54,6 +57,9 @@ class QueryBuilder<T> {
 
     for (const key in cleanedObj) {
       const value = cleanedObj[key]
+      if (typeof value === 'string' && value.toLowerCase() === 'all') {
+        continue
+      }
       if (typeof value === 'string' && value.includes(',')) {
         const rawArray = value.split(',').map(v => v.trim()).filter(Boolean)
         const expandedArray = Array.from(

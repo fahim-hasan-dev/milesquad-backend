@@ -4,6 +4,9 @@ import ApiError from "../../../errors/ApiError";
 import QueryBuilder from "../../builder/QueryBuilder";
 import { IPartner } from "./partner.interface";
 import { Partner } from "./partner.model";
+import { cacheDelByPattern, getOrSetCache } from "../../../helpers/cacheHelper";
+
+const CACHE_TTL_PARTNERS = 3600; // 1 hour
 
 const createPartner = async (payload: IPartner) => {
     const existingEmail = await Partner.findOne({ email: payload.email.toLowerCase() });
@@ -17,27 +20,35 @@ const createPartner = async (payload: IPartner) => {
     }
 
     const partner = await Partner.create(payload);
+    await cacheDelByPattern("cache:partner:*");
     return partner;
 };
 
 const getAllPartners = async (query: Record<string, unknown>) => {
-    const partnerQuery = new QueryBuilder(
-        Partner.find({ status: { $ne: 'deleted' } }),
-        query
-    )
-        .search(["fullName", "email", "phone", "rolePosition", "partnerId"])
-        .filter()
-        .sort()
-        .paginate()
-        .fields();
+    const queryKey = JSON.stringify(query || {});
+    return getOrSetCache(
+        `cache:partner:list:${queryKey}`,
+        async () => {
+            const partnerQuery = new QueryBuilder(
+                Partner.find({ status: { $ne: 'deleted' } }),
+                query
+            )
+                .search(["fullName", "email", "phone", "rolePosition", "partnerId"])
+                .filter()
+                .sort()
+                .paginate()
+                .fields();
 
-    const meta = await partnerQuery.getPaginationInfo();
-    const result = await partnerQuery.modelQuery;
+            const meta = await partnerQuery.getPaginationInfo();
+            const result = await partnerQuery.modelQuery;
 
-    return {
-        meta,
-        data: result,
-    };
+            return {
+                meta,
+                data: result,
+            };
+        },
+        CACHE_TTL_PARTNERS
+    );
 };
 
 const getSinglePartner = async (id: string) => {
@@ -78,6 +89,7 @@ const updatePartner = async (id: string, payload: Partial<IPartner>) => {
     }
 
     const updatedPartner = await Partner.findByIdAndUpdate(id, payload, { new: true });
+    await cacheDelByPattern("cache:partner:*");
     return updatedPartner;
 };
 
@@ -86,7 +98,9 @@ const deletePartner = async (id: string) => {
     if (!partner) {
         throw new ApiError(StatusCodes.NOT_FOUND, "Partner not found.");
     }
-    return await Partner.findByIdAndUpdate(id, { status: 'deleted' }, { new: true });
+    const result = await Partner.findByIdAndUpdate(id, { status: 'deleted' }, { new: true });
+    await cacheDelByPattern("cache:partner:*");
+    return result;
 };
 
 export const PartnerService = {
@@ -96,3 +110,4 @@ export const PartnerService = {
     updatePartner,
     deletePartner,
 };
+

@@ -8,6 +8,9 @@ import { JwtPayload } from 'jsonwebtoken';
 import QueryBuilder from '../../builder/QueryBuilder';
 import { AuthHelper } from '../auth/auth.helper';
 import { NotificationService } from '../notification/notification.service';
+import { cacheDel, cacheDelByPattern, getOrSetCache } from '../../../helpers/cacheHelper';
+
+const CACHE_TTL_USER_PROFILE = 900; 
 
 const getAllUser = async (query: Record<string, unknown>) => {
     const userQueryBuilder = new QueryBuilder(User.find().select('-password -authentication'), query)
@@ -36,17 +39,23 @@ const getAllUser = async (query: Record<string, unknown>) => {
 };
 
 const getSingleUser = async (id: string) => {
-    const isObjectId = Types.ObjectId.isValid(id);
-    const queryFilter = isObjectId ? { _id: id } : { userId: id };
+    return getOrSetCache(
+        `cache:user:single:${id}`,
+        async () => {
+            const isObjectId = Types.ObjectId.isValid(id);
+            const queryFilter = isObjectId ? { _id: id } : { userId: id };
 
-    const user: any = await User.findOne(queryFilter).select('-password -authentication').lean();
-    if (!user) {
-        throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
-    }
-    if (user.role !== USER_ROLES.DRIVER) {
-        delete user.driverInfo;
-    }
-    return user;
+            const user: any = await User.findOne(queryFilter).select('-password -authentication').lean();
+            if (!user) {
+                throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+            }
+            if (user.role !== USER_ROLES.DRIVER) {
+                delete user.driverInfo;
+            }
+            return user;
+        },
+        CACHE_TTL_USER_PROFILE
+    );
 };
 
 const deleteUser = async (id: string) => {
@@ -54,7 +63,14 @@ const deleteUser = async (id: string) => {
     if (!user) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
     }
-    return await User.findByIdAndDelete(id);
+    const result = await User.findByIdAndDelete(id);
+
+    // Invalidate user profile caches
+    await cacheDel(`cache:user:profile:${id}`, `cache:user:single:${id}`);
+    if (user.userId) {
+        await cacheDel(`cache:user:single:${user.userId}`);
+    }
+    return result;
 };
 
 const updateProfile = async (
@@ -71,14 +87,13 @@ const updateProfile = async (
     const cleanEmail = payload.email?.trim();
     if (cleanEmail && cleanEmail !== existingUser.email) {
         payload.isEmailVerified = false;
-           setTimeout(()=>{
+        setTimeout(() => {
             AuthHelper.sendEmailVerificationMagicLink(
                 userId,
                 cleanEmail,
                 payload.fullName || existingUser.fullName
             );
-      
-           },0)
+        }, 0);
     }
 
     if (existingUser.role === USER_ROLES.DRIVER && existingUser.driverInfo) {
@@ -114,19 +129,31 @@ const updateProfile = async (
         delete updatedUser.driverInfo;
     }
 
+    // Invalidate user profile caches
+    await cacheDel(`cache:user:profile:${userId}`, `cache:user:single:${userId}`);
+    if (existingUser.userId) {
+        await cacheDel(`cache:user:single:${existingUser.userId}`);
+    }
+
     return updatedUser;
 };
 
 const getProfile = async (user: JwtPayload) => {
     const userId = user.authId || user.id;
-    const existingUser: any = await User.findById(userId).select('-password -authentication').lean();
-    if (!existingUser) {
-        throw new ApiError(StatusCodes.NOT_FOUND, 'Profile not found or deleted.');
-    }
-    if (existingUser.role !== USER_ROLES.DRIVER) {
-        delete existingUser.driverInfo;
-    }
-    return existingUser;
+    return getOrSetCache(
+        `cache:user:profile:${userId}`,
+        async () => {
+            const existingUser: any = await User.findById(userId).select('-password -authentication').lean();
+            if (!existingUser) {
+                throw new ApiError(StatusCodes.NOT_FOUND, 'Profile not found or deleted.');
+            }
+            if (existingUser.role !== USER_ROLES.DRIVER) {
+                delete existingUser.driverInfo;
+            }
+            return existingUser;
+        },
+        CACHE_TTL_USER_PROFILE
+    );
 };
 
 const deleteMyAccount = async (user: JwtPayload) => {
@@ -136,6 +163,13 @@ const deleteMyAccount = async (user: JwtPayload) => {
         throw new ApiError(StatusCodes.NOT_FOUND, 'Profile not found or deleted.');
     }
     await User.findByIdAndDelete(userId);
+
+    // Invalidate user profile caches
+    await cacheDel(`cache:user:profile:${userId}`, `cache:user:single:${userId}`);
+    if (existingUser.userId) {
+        await cacheDel(`cache:user:single:${existingUser.userId}`);
+    }
+
     return 'Account deleted successfully';
 };
 
@@ -163,6 +197,12 @@ const approveDriverProfile = async (
         },
         { new: true }
     ).select('-password -authentication');
+
+    // Invalidate driver profile caches
+    await cacheDel(`cache:user:profile:${id}`, `cache:user:single:${id}`);
+    if (driver.userId) {
+        await cacheDel(`cache:user:single:${driver.userId}`);
+    }
 
     try {
         await NotificationService.insertNotification({
@@ -274,3 +314,4 @@ export const UserServices = {
     getDriverLiveLocation,
     exportUsersData,
 };
+

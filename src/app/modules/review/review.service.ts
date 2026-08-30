@@ -9,6 +9,9 @@ import ApiError from '../../../errors/ApiError'
 import mongoose from 'mongoose'
 import { NotificationService } from '../notification/notification.service'
 import { USER_ROLES } from '../../../enum/user'
+import { cacheDel, cacheDelByPattern, getOrSetCache } from '../../../helpers/cacheHelper'
+
+const CACHE_TTL_REVIEWS = 600 // 10 minutes
 
 const createReview = async (user: JwtPayload, payload: Partial<IReview> & { parcelId: string }) => {
   if (!payload.parcelId) {
@@ -53,6 +56,11 @@ const createReview = async (user: JwtPayload, payload: Partial<IReview> & { parc
     })
   }
 
+  // Invalidate reviews cache and profile cache for this driver
+  const driverIdStr = driverId.toString()
+  await cacheDel(`cache:user:profile:${driverIdStr}`, `cache:user:single:${driverIdStr}`)
+  await cacheDelByPattern(`cache:reviews:driver:${driverIdStr}:*`)
+
   try {
     await NotificationService.insertNotification({
       receiver: driverId,
@@ -88,21 +96,28 @@ const getAllReviews = async (query: Record<string, unknown>) => {
 }
 
 const getReviewsByDriver = async (driverId: string, query: Record<string, unknown>) => {
-  const reviewQueryBuilder = new QueryBuilder(Review.find({ driver: driverId }).populate('sender', 'fullName image'), query)
-    .filter()
-    .sort()
-    .fields()
-    .paginate()
+  const queryKey = JSON.stringify(query || {})
+  return getOrSetCache(
+    `cache:reviews:driver:${driverId}:${queryKey}`,
+    async () => {
+      const reviewQueryBuilder = new QueryBuilder(Review.find({ driver: driverId }).populate('sender', 'fullName image'), query)
+        .filter()
+        .sort()
+        .fields()
+        .paginate()
 
-  reviewQueryBuilder.modelQuery.select("rating comment sender createdAt").lean()
+      reviewQueryBuilder.modelQuery.select("rating comment sender createdAt").lean()
 
-  const reviews = await reviewQueryBuilder.modelQuery
-  const paginationInfo = await reviewQueryBuilder.getPaginationInfo()
+      const reviews = await reviewQueryBuilder.modelQuery
+      const paginationInfo = await reviewQueryBuilder.getPaginationInfo()
 
-  return {
-    reviews,
-    meta: paginationInfo,
-  }
+      return {
+        reviews,
+        meta: paginationInfo,
+      }
+    },
+    CACHE_TTL_REVIEWS
+  )
 }
 
 const getSingleReview = async (id: string) => {
@@ -146,6 +161,11 @@ const deleteReview = async (id: string) => {
         }
       })
     }
+
+    // Invalidate reviews cache and profile cache for this driver
+    const driverStr = String(driverId)
+    await cacheDel(`cache:user:profile:${driverStr}`, `cache:user:single:${driverStr}`)
+    await cacheDelByPattern(`cache:reviews:driver:${driverStr}:*`)
   }
 
   return result
