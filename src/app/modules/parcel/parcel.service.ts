@@ -96,8 +96,8 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
         throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Pricing settings not configured.");
     }
 
-    const selectedVehicleType = payload.vehicleType.toLowerCase() as keyof typeof systemSettings.fareSettings;
-    const allFareSettings = systemSettings.fareSettings || {} as any;
+    const selectedVehicleType = payload.vehicleType.toLowerCase().replace(/\s+/g, '_');
+    const allFareSettings = (systemSettings.fareSettings || {}) as Record<string, any>;
     const selectedVehicleFareSettings = allFareSettings[selectedVehicleType];
 
     if (!selectedVehicleFareSettings) {
@@ -118,12 +118,19 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
         );
     }
 
-    const lengthCm = payload.dimension?.length ?? 0;
-    const widthCm = payload.dimension?.width ?? 0;
-    const heightCm = payload.dimension?.height ?? 0;
-    const parcelVolume = Number((lengthCm * widthCm * heightCm * 1e-6).toFixed(6));
+    const isMotorcycle = selectedVehicleType === 'motorcycle';
 
-    if (vehicleMaxVolume > 0 && parcelVolume > vehicleMaxVolume) {
+    if (isMotorcycle) {
+        delete payload.dimension;
+    }
+
+    const lengthCm = isMotorcycle ? 0 : (payload.dimension?.length ?? 0);
+    const widthCm = isMotorcycle ? 0 : (payload.dimension?.width ?? 0);
+    const heightCm = isMotorcycle ? 0 : (payload.dimension?.height ?? 0);
+    const itemsCount = payload.numberOfGoods && payload.numberOfGoods > 0 ? payload.numberOfGoods : 1;
+    const parcelVolume = isMotorcycle ? 0 : Number((lengthCm * widthCm * heightCm * 1e-6 * itemsCount).toFixed(6));
+
+    if (!isMotorcycle && vehicleMaxVolume > 0 && parcelVolume > vehicleMaxVolume) {
         throw new ApiError(
             StatusCodes.BAD_REQUEST,
             `Parcel exceeds max size for ${payload.vehicleType}. Please select a larger vehicle.`
@@ -133,8 +140,10 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
     const isScheduledDelivery = payload.sameDayPickup === false || (payload.deliveryDate > new Date());
 
     const calculatedPricing = calculateParcelPricing({
-        dimension: payload.dimension,
+        dimension: isMotorcycle ? undefined : payload.dimension,
         totalWeight: payload.totalWeight,
+        numberOfGoods: payload.numberOfGoods,
+        vehicleType: selectedVehicleType,
         distanceKm: payload.dropDistance,
         dropDuration: payload.dropDuration,
         itemValue: payload.itemValue,
@@ -145,7 +154,7 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
     payload.baseFee = calculatedPricing.baseFee;
     payload.fuelCost = calculatedPricing.fuelCost;
     payload.timeCost = calculatedPricing.timeCost;
-    payload.goodRisks = calculatedPricing.goodRisks;
+    payload.goodInsurance = calculatedPricing.goodInsurance;
 
     payload.volume = calculatedPricing.volume;
     payload.volumeUtilization = calculatedPricing.volumeUtilization;
@@ -153,18 +162,14 @@ const createParcel = async (payload: IParcel, user: JwtPayload) => {
     payload.effectiveUtilization = calculatedPricing.effectiveUtilization;
     payload.loadFactor = calculatedPricing.loadFactor;
 
-    payload.totalPrice = calculatedPricing.totalPrice;
-    payload.additionalCost = calculatedPricing.additionalCost;
-    payload.totalRun = calculatedPricing.totalRun;
-
-    payload.overhead = calculatedPricing.overhead;
-    payload.milesquadInsurance = calculatedPricing.milesquadInsurance;
-    payload.marginMilesquad = calculatedPricing.marginMilesquad;
-
-    payload.totalOfRun = calculatedPricing.totalOfRun;
+    payload.directCost = calculatedPricing.directCost;
+    payload.overheadCost = calculatedPricing.overheadCost;
+    payload.operationCost = calculatedPricing.operationCost;
     payload.serviceFee = calculatedPricing.serviceFee;
-    payload.totalToPay = calculatedPricing.totalToPay;
-    payload.totalDeliveryFee = calculatedPricing.totalDeliveryFee;
+    payload.milesquadMargin = calculatedPricing.milesquadMargin;
+
+    payload.deliveryFee = calculatedPricing.deliveryFee;
+    payload.totalOfRun = calculatedPricing.totalOfRun;
 
     payload.sender = new Types.ObjectId(user.authId || user.id);
     payload.status = PARCEL_STATUS.CREATED;
@@ -207,7 +212,7 @@ const selectPaymentMethod = async (
             { delay: 60 * 60 * 1000 }
         );
 
-        const amountToPay = parcel.totalToPay || parcel.totalDeliveryFee;
+        const amountToPay = parcel.deliveryFee || 0;
         const paymentLink = await createPaymentSession(
             user,
             amountToPay,
@@ -264,7 +269,7 @@ const selectPaymentMethod = async (
 };
 
 const getAllParcels = async (query: Record<string, unknown>) => {
-    const defaultFields = "parcelId goodType status totalDeliveryFee totalToPay totalPrice itemValue vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
+    const defaultFields = "parcelId goodType numberOfGoods totalWeight dimension sameDayPickup vehicleType pickupLocation dropLocation receiverPhone status baseFee timeCost fuelCost directCost overheadCost operationCost serviceFee milesquadMargin deliveryFee goodInsurance totalOfRun sender driver partner createdAt";
     const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
 
     const extraOrConditions: any[] = [];
@@ -346,7 +351,7 @@ const getUserOrders = async (userId: string, query: Record<string, unknown>) => 
         }
     }
 
-    const defaultFields = "parcelId goodType status totalDeliveryFee totalToPay totalPrice itemValue vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
+    const defaultFields = "parcelId goodType status deliveryFee goodInsurance itemValue vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
     const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
 
     const extraOrConditions: any[] = [];
@@ -374,10 +379,10 @@ const getUserOrders = async (userId: string, query: Record<string, unknown>) => 
     const parcels = await parcelQuery.modelQuery;
     const meta = await parcelQuery.getPaginationInfo();
 
-    const allUserParcels = await Parcel.find(filter).select("totalToPay totalPrice totalDeliveryFee status").lean();
+    const allUserParcels = await Parcel.find(filter).select("deliveryFee status").lean();
     let totalSpent = 0;
     allUserParcels.forEach((p: any) => {
-        totalSpent += Number(p.totalToPay || p.totalPrice || p.totalDeliveryFee || 0);
+        totalSpent += Number(p.deliveryFee || 0);
     });
 
     return { parcels, meta, totalOrders: meta.total, totalSpent };
@@ -388,11 +393,15 @@ const getMyParcels = async (
     role: string,
     query: Record<string, unknown>
 ) => {
-    const filter = role === USER_ROLES.DRIVER
+    const isDriver = role === USER_ROLES.DRIVER;
+    const filter = isDriver
         ? { driver: userId, status: { $ne: PARCEL_STATUS.CREATED } }
         : { sender: userId, status: { $ne: PARCEL_STATUS.CREATED } };
 
-    const defaultFields = "parcelId goodType status totalDeliveryFee totalToPay totalPrice itemValue vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
+    const driverDefaultFields = "parcelId goodType status numberOfGoods totalWeight dimension vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt baseFee timeCost fuelCost directCost totalOfRun";
+    const customerDefaultFields = "parcelId goodType status operationCost serviceFee goodInsurance deliveryFee itemValue vehicleType pickupLocation dropLocation receiverPhone sender driver partner createdAt";
+
+    const defaultFields = isDriver ? driverDefaultFields : customerDefaultFields;
     const selectedFields = query.fields ? (query.fields as string).split(',').join(' ') : defaultFields;
 
     const parcelQuery = new QueryBuilder(
@@ -409,7 +418,31 @@ const getMyParcels = async (
 
     parcelQuery.modelQuery.select(selectedFields).lean();
 
-    const parcels = await parcelQuery.modelQuery;
+    let parcels = await parcelQuery.modelQuery;
+
+    if (isDriver && Array.isArray(parcels)) {
+        parcels = parcels.map((p: any) => {
+            delete p.deliveryFee;
+            delete p.overheadCost;
+            delete p.operationCost;
+            delete p.serviceFee;
+            delete p.milesquadMargin;
+            delete p.goodInsurance;
+            return p;
+        });
+    } else if (!isDriver && Array.isArray(parcels)) {
+        parcels = parcels.map((p: any) => {
+            delete p.overheadCost;
+            delete p.milesquadMargin;
+            delete p.baseFee;
+            delete p.timeCost;
+            delete p.fuelCost;
+            delete p.directCost;
+            delete p.totalOfRun;
+            return p;
+        });
+    }
+
     const meta = await parcelQuery.getPaginationInfo();
 
     return { parcels, meta };
@@ -443,7 +476,12 @@ const getNearbyParcels = async (
         const userId = user.authId || user.id;
         const driver = await User.findById(userId).select("driverInfo.vehicleType").lean();
         if (driver?.driverInfo?.vehicleType) {
-            matchQuery.vehicleType = driver.driverInfo.vehicleType;
+            const vType = String(driver.driverInfo.vehicleType);
+            if (vType === 'small_cargo' || vType === 'small cargo' || vType === 'truck') {
+                matchQuery.vehicleType = { $in: ['small_cargo', 'small cargo', 'truck'] };
+            } else {
+                matchQuery.vehicleType = vType;
+            }
         }
     }
 
@@ -484,7 +522,11 @@ const getNearbyParcels = async (
                 deliveryDate: 1,
                 sender: 1,
                 status: 1,
-                driverShare: 1,
+                baseFee: 1,
+                timeCost: 1,
+                fuelCost: 1,
+                directCost: 1,
+                totalOfRun: 1,
                 receiverPhone: 1,
                 packagePhotos: 1,
                 pdfDocument: 1
@@ -623,29 +665,49 @@ const getSingleParcel = async (id: string, user?: JwtPayload) => {
         baseFee: parcel.baseFee || 0,
         timeCost: parcel.timeCost || 0,
         fuelCost: parcel.fuelCost || 0,
-        totalPrice: parcel.totalPrice || 0,
-        additionalCost: parcel.additionalCost || 0,
-        totalRun: parcel.totalRun || 0,
+        directCost: parcel.directCost || 0,
+        totalOfRun: parcel.totalOfRun || parcel.directCost || 0,
     };
 
     const customerPricing = {
-        totalOfRun: parcel.totalOfRun || 0,
+        operationCost: parcel.operationCost || 0,
         serviceFee: parcel.serviceFee || 0,
-        goodInsurance: parcel.goodRisks || 0,
-        totalToPay: parcel.totalToPay || parcel.totalDeliveryFee || 0,
+        goodInsurance: parcel.goodInsurance || 0,
+        deliveryFee: parcel.deliveryFee || 0,
     };
 
     const adminPricing = {
-        overhead: parcel.overhead || 0,
-        milesquadInsurance: parcel.milesquadInsurance || 0,
-        marginMilesquad: parcel.marginMilesquad || 0,
+        baseFee: parcel.baseFee || 0,
+        timeCost: parcel.timeCost || 0,
+        fuelCost: parcel.fuelCost || 0,
+        directCost: parcel.directCost || 0,
+        overheadCost: parcel.overheadCost || 0,
+        operationCost: parcel.operationCost || 0,
+        serviceFee: parcel.serviceFee || 0,
+        milesquadMargin: parcel.milesquadMargin || parcel.serviceFee || 0,
+        deliveryFee: parcel.deliveryFee || 0,
+        goodInsurance: parcel.goodInsurance || 0,
+        totalOfRun: parcel.totalOfRun || 0,
     };
 
     const userRole = user?.role;
 
     if (userRole === USER_ROLES.DRIVER) {
+        delete parcelObj.deliveryFee;
+        delete parcelObj.overheadCost;
+        delete parcelObj.operationCost;
+        delete parcelObj.serviceFee;
+        delete parcelObj.milesquadMargin;
+        delete parcelObj.goodInsurance;
         parcelObj.pricingDetails = driverPricing;
     } else if (userRole === USER_ROLES.CUSTOMER) {
+        delete parcelObj.overheadCost;
+        delete parcelObj.milesquadMargin;
+        delete parcelObj.baseFee;
+        delete parcelObj.timeCost;
+        delete parcelObj.fuelCost;
+        delete parcelObj.directCost;
+        delete parcelObj.totalOfRun;
         parcelObj.pricingDetails = customerPricing;
     } else if (userRole === ADMIN_ROLES.SUPER_ADMIN || userRole === ADMIN_ROLES.SUB_ADMIN) {
         parcelObj.pricingDetails = {
@@ -745,7 +807,7 @@ const updateParcel = async (
 
         // Credit driver's wallet balance if parcel was paid online
         if (parcel.driver && parcel.paymentMethod === PAYMENT_METHOD.ONLINE) {
-            const driverPayout = parcel.totalRun || 0;
+            const driverPayout = parcel.totalOfRun || parcel.directCost || 0;
             if (driverPayout > 0) {
                 await User.findByIdAndUpdate(parcel.driver, {
                     $inc: { 'driverInfo.wallet': driverPayout },
@@ -1144,6 +1206,8 @@ const getAvailableDriversForParcel = async (parcelId: string) => {
 };
 
 const getCurrentActiveParcel = async (userId: string, role: string) => {
+    const isDriver = role === USER_ROLES.DRIVER;
+
     const runningStatuses = [
         PARCEL_STATUS.RIDER_ASSIGNED,
         PARCEL_STATUS.ON_THE_WAY_TO_PICKUP,
@@ -1151,14 +1215,21 @@ const getCurrentActiveParcel = async (userId: string, role: string) => {
         PARCEL_STATUS.ON_THE_WAY_TO_DELIVERY,
     ];
 
-    const baseFilter = role === USER_ROLES.DRIVER
+    const baseFilter = isDriver
         ? { driver: userId }
         : { sender: userId };
 
-    const selectedFields =
+    const driverSelectedFields =
         "_id parcelId goodType numberOfGoods vehicleType status isDriverAssigned " +
         "pickupLocation dropLocation receiverPhone deliveryDate pickedUpAt deliveredAt " +
-        "totalToPay totalDeliveryFee paymentMethod sender driver partner statusProgress createdAt";
+        "baseFee timeCost fuelCost directCost totalOfRun paymentMethod sender driver partner statusProgress createdAt";
+
+    const customerSelectedFields =
+        "_id parcelId goodType numberOfGoods vehicleType status isDriverAssigned " +
+        "pickupLocation dropLocation receiverPhone deliveryDate pickedUpAt deliveredAt " +
+        "operationCost serviceFee goodInsurance deliveryFee paymentMethod sender driver partner statusProgress createdAt";
+
+    const selectedFields = isDriver ? driverSelectedFields : customerSelectedFields;
 
     const populateOptions = [
         { path: "sender", select: "userId fullName phone email image" },
@@ -1172,7 +1243,8 @@ const getCurrentActiveParcel = async (userId: string, role: string) => {
     })
         .select(selectedFields)
         .sort({ updatedAt: -1 })
-        .populate(populateOptions);
+        .populate(populateOptions)
+        .lean();
 
     if (!activeParcel) {
         activeParcel = await Parcel.findOne({
@@ -1181,7 +1253,25 @@ const getCurrentActiveParcel = async (userId: string, role: string) => {
         })
             .select(selectedFields)
             .sort({ createdAt: -1 })
-            .populate(populateOptions);
+            .populate(populateOptions)
+            .lean();
+    }
+
+    if (isDriver && activeParcel) {
+        delete (activeParcel as any).deliveryFee;
+        delete (activeParcel as any).overheadCost;
+        delete (activeParcel as any).operationCost;
+        delete (activeParcel as any).serviceFee;
+        delete (activeParcel as any).milesquadMargin;
+        delete (activeParcel as any).goodInsurance;
+    } else if (!isDriver && activeParcel) {
+        delete (activeParcel as any).overheadCost;
+        delete (activeParcel as any).milesquadMargin;
+        delete (activeParcel as any).baseFee;
+        delete (activeParcel as any).timeCost;
+        delete (activeParcel as any).fuelCost;
+        delete (activeParcel as any).directCost;
+        delete (activeParcel as any).totalOfRun;
     }
 
     return activeParcel;

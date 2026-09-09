@@ -12,7 +12,6 @@ const FareSettingSubSchema = new Schema({
     riskIndex2: { type: Number, default: 0 },
     riskIndex3: { type: Number, default: 0 },
     loadFactor: { type: Number, default: 0 },
-    scheduledDelivery: { type: Number, default: 0 },
     maxWeight: { type: Number, default: 0 },
     maxVolume: { type: Number, default: 0 },
 }, { _id: false });

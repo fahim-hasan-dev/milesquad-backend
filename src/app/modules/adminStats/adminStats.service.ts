@@ -15,7 +15,7 @@ const getAdminDashboardStats = async (year: number) => {
                 {
                     $group: {
                         _id: null,
-                        total: { $sum: { $ifNull: ['$totalToPay', { $ifNull: ['$totalPrice', '$totalDeliveryFee'] }] } }
+                        total: { $sum: { $ifNull: ['$deliveryFee', 0] } }
                     }
                 }
             ]);
@@ -38,7 +38,7 @@ const getAdminDashboardStats = async (year: number) => {
                 {
                     $group: {
                         _id: { $month: '$createdAt' },
-                        revenue: { $sum: { $ifNull: ['$totalToPay', { $ifNull: ['$totalPrice', '$totalDeliveryFee'] }] } }
+                        revenue: { $sum: { $ifNull: ['$deliveryFee', 0] } }
                     }
                 },
                 { $sort: { '_id': 1 } }
@@ -97,7 +97,7 @@ const getAdminDashboardStats = async (year: number) => {
                 .lean();
 
             const completedOrders = recentParcels.map((p: any, idx: number) => {
-                const numPrice = Number(p.totalToPay || p.totalPrice || p.totalDeliveryFee || 0);
+                const numPrice = Number(p.deliveryFee || 0);
                 return {
                     id: p._id.toString(),
                     sl: idx + 1,

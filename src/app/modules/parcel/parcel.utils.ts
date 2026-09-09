@@ -141,8 +141,12 @@ export const notifyNearbyDriversOfNewParcel = async (parcel: any) => {
 
                 // Vehicle Type Check
                 const driverVehicle = vehicleMap.get(driver.driverId);
-                if (parcel.vehicleType && driverVehicle && parcel.vehicleType !== driverVehicle) {
-                    return false; // Vehicle mismatch, skip!
+                if (parcel.vehicleType && driverVehicle) {
+                    const normParcel = parcel.vehicleType.toLowerCase().replace(/[\s_]+/g, '');
+                    const normDriver = driverVehicle.toLowerCase().replace(/[\s_]+/g, '');
+                    if (normParcel !== normDriver && !(normParcel === 'smallcargo' && normDriver === 'truck') && !(normParcel === 'truck' && normDriver === 'smallcargo')) {
+                        return false; // Vehicle mismatch, skip!
+                    }
                 }
 
                 // 50km Radius Check

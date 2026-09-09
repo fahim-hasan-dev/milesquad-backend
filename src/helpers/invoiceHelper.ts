@@ -14,10 +14,11 @@ export const generateInvoiceHTML = (parcel: any, customer?: any) => {
     const isCancelled = parcel.status === 'cancelled';
     const statusText = isPaid ? 'PAID' : isCancelled ? 'CANCELLED' : 'PENDING (HAND CASH)';
 
-    const totalOfRun = parcel.totalOfRun ?? 0;
+    const isMotorcycle = parcel.vehicleType?.toLowerCase().replace(/\s+/g, '_') === 'motorcycle';
+    const operationCost = parcel.operationCost ?? 0;
     const serviceFee = parcel.serviceFee ?? 0;
-    const goodRisks = parcel.goodRisks ?? 0;
-    const totalToPay = parcel.totalToPay ?? parcel.totalDeliveryFee ?? 0;
+    const goodInsurance = parcel.goodInsurance ?? parcel.goodRisks ?? 0;
+    const deliveryFee = parcel.deliveryFee ?? parcel.totalToPay ?? parcel.totalDeliveryFee ?? 0;
 
     const brandDark = '#1B2A4A';
     const brandGreen = '#16A34A';
@@ -25,6 +26,32 @@ export const generateInvoiceHTML = (parcel: any, customer?: any) => {
     const logoHtml = config.logo_url
         ? `<img src="${config.logo_url}" alt="Milesquad Logo" style="max-height:60px; max-width:220px; width:auto; height:auto; display:block; margin:0 auto; object-fit:contain;" />`
         : `<h1 style="margin:0; color:${brandDark}; font-size:28px; font-weight:800; font-family:'Segoe UI', Arial, sans-serif; letter-spacing:1px;">MILES<span style="color:${brandGreen};">QUAD</span></h1>`;
+
+    const tableBodyHtml = isMotorcycle
+        ? `
+          <tr style="border-top:2px solid ${brandDark};">
+            <td style="padding:14px 0; font-size:15px; font-weight:800; color:${brandDark};">Delivery fee</td>
+            <td align="right" style="padding:14px 0; font-size:18px; font-weight:800; color:${brandGreen};">${deliveryFee.toLocaleString('en-US')} XOF</td>
+          </tr>
+        `
+        : `
+          <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:10px 0; color:#4b5563;">Operation cost</td>
+            <td align="right" style="padding:10px 0; color:${brandDark}; font-weight:600;">${operationCost.toLocaleString('en-US')} XOF</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:10px 0; color:#4b5563;">Service fee</td>
+            <td align="right" style="padding:10px 0; color:${brandDark}; font-weight:600;">${serviceFee.toLocaleString('en-US')} XOF</td>
+          </tr>
+          <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:10px 0; color:#4b5563;">Good insurance</td>
+            <td align="right" style="padding:10px 0; color:${brandDark}; font-weight:600;">${goodInsurance.toLocaleString('en-US')} XOF</td>
+          </tr>
+          <tr style="border-top:2px solid ${brandDark};">
+            <td style="padding:14px 0; font-size:15px; font-weight:800; color:${brandDark};">Delivery fee</td>
+            <td align="right" style="padding:14px 0; font-size:18px; font-weight:800; color:${brandGreen};">${deliveryFee.toLocaleString('en-US')} XOF</td>
+          </tr>
+        `;
 
     return `
 <!DOCTYPE html>
@@ -72,7 +99,7 @@ export const generateInvoiceHTML = (parcel: any, customer?: any) => {
           <div style="font-size:12px; font-weight:800; color:${brandGreen}; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px;">DELIVERY DETAILS</div>
           <div style="color:#4b5563; line-height:1.6;">
             <strong style="color:${brandDark};">Good Type:</strong> ${parcel.goodType || 'Parcel'}<br />
-            <strong style="color:${brandDark};">Vehicle Type:</strong> ${parcel.vehicleType || 'Standard'}<br />
+            <strong style="color:${brandDark};">Vehicle Type:</strong> ${(parcel.vehicleType || 'Standard').replace(/_/g, ' ').toUpperCase()}<br />
             <strong style="color:${brandDark};">Pickup:</strong> ${parcel.pickupLocation?.address || 'N/A'}<br />
             <strong style="color:${brandDark};">Dropoff:</strong> ${parcel.dropLocation?.address || 'N/A'}
           </div>
@@ -91,22 +118,7 @@ export const generateInvoiceHTML = (parcel: any, customer?: any) => {
           </tr>
         </thead>
         <tbody>
-          <tr style="border-bottom:1px solid #e5e7eb;">
-            <td style="padding:10px 0; color:#4b5563;">Total of the run</td>
-            <td align="right" style="padding:10px 0; color:${brandDark}; font-weight:600;">${totalOfRun.toLocaleString('en-US')} XOF</td>
-          </tr>
-          <tr style="border-bottom:1px solid #e5e7eb;">
-            <td style="padding:10px 0; color:#4b5563;">Service fee</td>
-            <td align="right" style="padding:10px 0; color:${brandDark}; font-weight:600;">${serviceFee.toLocaleString('en-US')} XOF</td>
-          </tr>
-          <tr style="border-bottom:1px solid #e5e7eb;">
-            <td style="padding:10px 0; color:#4b5563;">Good insurance</td>
-            <td align="right" style="padding:10px 0; color:${brandDark}; font-weight:600;">${goodRisks.toLocaleString('en-US')} XOF</td>
-          </tr>
-          <tr style="border-top:2px solid ${brandDark};">
-            <td style="padding:14px 0; font-size:15px; font-weight:800; color:${brandDark};">Total to Pay</td>
-            <td align="right" style="padding:14px 0; font-size:18px; font-weight:800; color:${brandGreen};">${totalToPay.toLocaleString('en-US')} XOF</td>
-          </tr>
+          ${tableBodyHtml}
         </tbody>
       </table>
     </div>
@@ -152,10 +164,11 @@ export const generateInvoicePDFBuffer = async (parcel: any, customer?: any): Pro
             const isCancelled = parcel.status === 'cancelled';
             const statusText = isPaid ? 'PAID' : isCancelled ? 'CANCELLED' : 'PENDING (HAND CASH)';
 
-            const totalOfRun = parcel.totalOfRun ?? 0;
+            const isMotorcycle = parcel.vehicleType?.toLowerCase().replace(/\s+/g, '_') === 'motorcycle';
+            const operationCost = parcel.operationCost ?? 0;
             const serviceFee = parcel.serviceFee ?? 0;
-            const goodRisks = parcel.goodRisks ?? 0;
-            const totalToPay = parcel.totalToPay ?? parcel.totalDeliveryFee ?? 0;
+            const goodInsurance = parcel.goodInsurance ?? parcel.goodRisks ?? 0;
+            const deliveryFee = parcel.deliveryFee ?? parcel.totalToPay ?? parcel.totalDeliveryFee ?? 0;
 
             const brandDark = '#1B2A4A';
             const brandGreen = '#16A34A';
@@ -203,7 +216,7 @@ export const generateInvoicePDFBuffer = async (parcel: any, customer?: any): Pro
             doc.fillColor(brandDark).fontSize(9).font('Helvetica-Bold').text('Good Type: ', 310, colY + 16, { continued: true })
                .font('Helvetica').fillColor(mutedColor).text(parcel.goodType || 'Parcel');
             doc.fillColor(brandDark).fontSize(9).font('Helvetica-Bold').text('Vehicle Type: ', 310, colY + 30, { continued: true })
-               .font('Helvetica').fillColor(mutedColor).text(parcel.vehicleType || 'Standard');
+               .font('Helvetica').fillColor(mutedColor).text((parcel.vehicleType || 'Standard').replace(/_/g, ' ').toUpperCase());
             doc.fillColor(brandDark).fontSize(9).font('Helvetica-Bold').text('Pickup: ', 310, colY + 43, { continued: true })
                .font('Helvetica').fillColor(mutedColor).text(parcel.pickupLocation?.address || 'N/A', { width: 245 });
             doc.fillColor(brandDark).fontSize(9).font('Helvetica-Bold').text('Dropoff: ', 310, colY + 68, { continued: true })
@@ -223,26 +236,30 @@ export const generateInvoicePDFBuffer = async (parcel: any, customer?: any): Pro
             
             doc.moveTo(40, tableTop + 14).lineTo(555, tableTop + 14).strokeColor(brandDark).lineWidth(1.5).stroke();
 
-            // Table Rows
             let rowY = tableTop + 22;
-            doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text('Total of the run', 40, rowY);
-            doc.fillColor(brandDark).fontSize(9).font('Helvetica').text(`${totalOfRun.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
-            doc.moveTo(40, rowY + 14).lineTo(555, rowY + 14).strokeColor('#E5E7EB').lineWidth(0.5).stroke();
 
-            rowY += 20;
-            doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text('Service fee', 40, rowY);
-            doc.fillColor(brandDark).fontSize(9).font('Helvetica').text(`${serviceFee.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
-            doc.moveTo(40, rowY + 14).lineTo(555, rowY + 14).strokeColor('#E5E7EB').lineWidth(0.5).stroke();
+            if (isMotorcycle) {
+                doc.fillColor(brandDark).fontSize(11).font('Helvetica-Bold').text('Delivery fee', 40, rowY);
+                doc.fillColor(brandGreen).fontSize(14).font('Helvetica-Bold').text(`${deliveryFee.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
+            } else {
+                doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text('Operation cost', 40, rowY);
+                doc.fillColor(brandDark).fontSize(9).font('Helvetica').text(`${operationCost.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
+                doc.moveTo(40, rowY + 14).lineTo(555, rowY + 14).strokeColor('#E5E7EB').lineWidth(0.5).stroke();
 
-            rowY += 20;
-            doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text('Good insurance', 40, rowY);
-            doc.fillColor(brandDark).fontSize(9).font('Helvetica').text(`${goodRisks.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
-            doc.moveTo(40, rowY + 14).lineTo(555, rowY + 14).strokeColor('#E5E7EB').lineWidth(1.5).stroke();
+                rowY += 20;
+                doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text('Service fee', 40, rowY);
+                doc.fillColor(brandDark).fontSize(9).font('Helvetica').text(`${serviceFee.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
+                doc.moveTo(40, rowY + 14).lineTo(555, rowY + 14).strokeColor('#E5E7EB').lineWidth(0.5).stroke();
 
-            // Total to Pay
-            rowY += 22;
-            doc.fillColor(brandDark).fontSize(11).font('Helvetica-Bold').text('Total to Pay', 40, rowY);
-            doc.fillColor(brandGreen).fontSize(14).font('Helvetica-Bold').text(`${totalToPay.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
+                rowY += 20;
+                doc.fillColor(mutedColor).fontSize(9).font('Helvetica').text('Good insurance', 40, rowY);
+                doc.fillColor(brandDark).fontSize(9).font('Helvetica').text(`${goodInsurance.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
+                doc.moveTo(40, rowY + 14).lineTo(555, rowY + 14).strokeColor('#E5E7EB').lineWidth(1.5).stroke();
+
+                rowY += 22;
+                doc.fillColor(brandDark).fontSize(11).font('Helvetica-Bold').text('Delivery fee', 40, rowY);
+                doc.fillColor(brandGreen).fontSize(14).font('Helvetica-Bold').text(`${deliveryFee.toLocaleString('en-US')} XOF`, 400, rowY, { align: 'right', width: 155 });
+            }
 
             // Footer
             doc.moveTo(40, 750).lineTo(555, 750).strokeColor('#E5E7EB').lineWidth(1).stroke();
@@ -254,6 +271,3 @@ export const generateInvoicePDFBuffer = async (parcel: any, customer?: any): Pro
         }
     });
 };
-
-
-

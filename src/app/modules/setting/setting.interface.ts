@@ -9,7 +9,6 @@ export type IFareSetting = {
     riskIndex2: number;
     riskIndex3: number;
     loadFactor: number;
-    scheduledDelivery: number;
     maxWeight: number;
     maxVolume: number;
 };

@@ -11,7 +11,6 @@ const fareSettingValidation = z.object({
     riskIndex2: z.number().optional(),
     riskIndex3: z.number().optional(),
     loadFactor: z.number().optional(),
-    scheduledDelivery: z.number().optional(),
     maxWeight: z.number().optional(),
     maxVolume: z.number().optional(),
 }).optional();

@@ -13,6 +13,41 @@ const getSettings = async (): Promise<ISetting | null> => {
             if (!settings) {
                 settings = await Setting.create({});
             }
+
+            const rawFs = (settings.fareSettings as any) || {};
+            const hasLegacyKeys = Boolean(rawFs.truck || rawFs["small cargo"] || rawFs.smallCargo);
+
+            if (hasLegacyKeys) {
+                const fallbackFare = rawFs.small_cargo || rawFs["small cargo"] || rawFs.smallCargo || rawFs.truck;
+                const updatedSmallCargo = (fallbackFare && (fallbackFare.maxWeight > 0 || fallbackFare.baseFee > 0))
+                    ? fallbackFare
+                    : (rawFs.truck || rawFs.small_cargo || {});
+
+                settings = await Setting.findOneAndUpdate(
+                    {},
+                    {
+                        $set: { "fareSettings.small_cargo": updatedSmallCargo },
+                        $unset: {
+                            "fareSettings.truck": "",
+                            "fareSettings.small cargo": "",
+                            "fareSettings.smallCargo": ""
+                        }
+                    },
+                    { new: true }
+                );
+            }
+
+            // Ensure clean lean output without legacy fields
+            if (settings) {
+                const settingsObj = settings.toObject ? settings.toObject() : settings;
+                if (settingsObj.fareSettings) {
+                    delete (settingsObj.fareSettings as any).truck;
+                    delete (settingsObj.fareSettings as any)["small cargo"];
+                    delete (settingsObj.fareSettings as any).smallCargo;
+                }
+                return settingsObj as ISetting;
+            }
+
             return settings;
         },
         SETTINGS_TTL
@@ -25,7 +60,14 @@ const updateSettings = async (payload: Partial<ISetting>): Promise<ISetting | nu
     if (!settings) {
         settings = await Setting.create(payload);
     } else {
-        settings = await Setting.findOneAndUpdate({}, payload, {
+        settings = await Setting.findOneAndUpdate({}, {
+            $set: payload,
+            $unset: {
+                "fareSettings.truck": "",
+                "fareSettings.small cargo": "",
+                "fareSettings.smallCargo": ""
+            }
+        }, {
             new: true,
             runValidators: true,
         });

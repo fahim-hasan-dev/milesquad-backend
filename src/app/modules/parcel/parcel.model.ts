@@ -82,27 +82,24 @@ const ParcelSchema = new Schema<IParcel>(
         effectiveUtilization: { type: Number, default: 0 },
         loadFactor: { type: Number, default: 1 },
 
-        // Costs
+        // Costs & Factors
         baseFee: { type: Number, default: 0 },
         fuelCost: { type: Number, default: 0 },
         timeCost: { type: Number, default: 0 },
-        goodRisks: { type: Number, default: 0 },
+        goodInsurance: { type: Number, default: 0 },
 
         // Driver App Breakdown
-        totalPrice: { type: Number, default: 0 },
-        additionalCost: { type: Number, default: 0 },
-        totalRun: { type: Number, default: 0 },
+        directCost: { type: Number, default: 0 },
+        totalOfRun: { type: Number, default: 0 },
 
-        // Admin Panel Breakdown
-        overhead: { type: Number, default: 0 },
-        milesquadInsurance: { type: Number, default: 0 },
-        marginMilesquad: { type: Number, default: 0 },
+        // Admin Dashboard Breakdown
+        overheadCost: { type: Number, default: 0 },
+        operationCost: { type: Number, default: 0 },
+        serviceFee: { type: Number, default: 0 },
+        milesquadMargin: { type: Number, default: 0 },
 
         // Customer App Breakdown
-        totalOfRun: { type: Number, default: 0 },
-        serviceFee: { type: Number, default: 0 },
-        totalToPay: { type: Number, default: 0 },
-        totalDeliveryFee: { type: Number, default: 0 },
+        deliveryFee: { type: Number, default: 0 },
 
         paymentId: {
             type: String,
