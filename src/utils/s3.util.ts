@@ -53,29 +53,42 @@ export const deleteFromR2 = async (fileKeyOrUrl: string): Promise<void> => {
 /**
  * Recursively finds all R2 file URLs in an object (like a Mongoose document).
  */
-const findR2Urls = (obj: any): string[] => {
+const findR2Urls = (obj: any, visited = new WeakSet()): string[] => {
   let urls: string[] = [];
   if (!obj || typeof obj !== 'object') return urls;
 
-  for (const key in obj) {
-    const value = obj[key];
+  // Prevent infinite recursion from circular references
+  if (visited.has(obj)) return urls;
+  visited.add(obj);
+
+  // Safely extract plain object if it's a Mongoose document
+  let safeObj = obj;
+  if (typeof obj.toJSON === 'function') {
+    try {
+      safeObj = obj.toJSON();
+    } catch (e) {
+      // fallback to original if toJSON fails
+    }
+  }
+
+  for (const key in safeObj) {
+    const value = safeObj[key];
     if (typeof value === 'string' && config.r2.publicUrl && value.startsWith(config.r2.publicUrl)) {
       urls.push(value);
     } else if (Array.isArray(value)) {
       value.forEach((item) => {
-        urls = urls.concat(findR2Urls(item));
+        urls = urls.concat(findR2Urls(item, visited));
       });
-    } else if (typeof value === 'object') {
-      urls = urls.concat(findR2Urls(value));
+    } else if (typeof value === 'object' && value !== null) {
+      urls = urls.concat(findR2Urls(value, visited));
     }
   }
-  return urls;
+  return Array.from(new Set(urls)); // Return unique URLs
 };
 
 export const deleteReplacedFiles = async (oldData: any, newData: any) => {
   const oldUrls = findR2Urls(oldData);
-  // We stringify and parse to handle Mongoose documents and complex objects
-  const newUrls = findR2Urls(JSON.parse(JSON.stringify(newData)));
+  const newUrls = findR2Urls(newData);
 
   // Find URLs that exist in the old data but not in the new data
   const urlsToDelete = oldUrls.filter(url => !newUrls.includes(url));
