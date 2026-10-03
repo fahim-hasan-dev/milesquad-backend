@@ -9,6 +9,7 @@ import stripe from "../../../config/stripe";
 import { Payment } from "../payment/payment.model";
 import QueryBuilder from "../../builder/QueryBuilder";
 import { trackingService } from "../../../helpers/trackingService";
+import { deleteReplacedFiles, deleteAllFiles } from "../../../utils/s3.util";
 import { getDistanceAndDuration } from "../../../utils/googleMaps.util";
 import { SettingServices } from "../setting/setting.service";
 import { redisClient } from "../../../helpers/redis";
@@ -860,6 +861,8 @@ const updateParcel = async (
         }
     }
 
+    await deleteReplacedFiles(parcel.toObject ? parcel.toObject() : parcel, payload);
+
     const updatedParcel = await Parcel.findByIdAndUpdate(id, payload, {
         new: true,
         runValidators: true,
@@ -973,6 +976,9 @@ const deleteParcel = async (id: string) => {
     if (!parcel) {
         throw new ApiError(StatusCodes.NOT_FOUND, "Parcel not found");
     }
+    
+    await deleteAllFiles(parcel.toObject ? parcel.toObject() : parcel);
+    
     return await Parcel.findByIdAndDelete(id);
 };
 

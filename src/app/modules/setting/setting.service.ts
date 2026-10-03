@@ -1,6 +1,7 @@
 import { cacheDel, getOrSetCache } from "../../../helpers/cacheHelper";
 import { ISetting } from "./setting.interface";
 import { Setting } from "./setting.model";
+import { deleteReplacedFiles } from "../../../utils/s3.util";
 
 const CACHE_KEY_SETTINGS = "cache:system_settings";
 const SETTINGS_TTL = 86400; // 24 hours
@@ -60,6 +61,7 @@ const updateSettings = async (payload: Partial<ISetting>): Promise<ISetting | nu
     if (!settings) {
         settings = await Setting.create(payload);
     } else {
+        await deleteReplacedFiles(settings, payload);
         settings = await Setting.findOneAndUpdate({}, {
             $set: payload,
             $unset: {

@@ -9,6 +9,7 @@ import QueryBuilder from '../../builder/QueryBuilder';
 import { AuthHelper } from '../auth/auth.helper';
 import { NotificationService } from '../notification/notification.service';
 import { cacheDel, cacheDelByPattern, getOrSetCache } from '../../../helpers/cacheHelper';
+import { deleteReplacedFiles, deleteAllFiles } from '../../../utils/s3.util';
 
 const CACHE_TTL_USER_PROFILE = 900; 
 
@@ -59,10 +60,14 @@ const getSingleUser = async (id: string) => {
 };
 
 const deleteUser = async (id: string) => {
-    const user = await User.findById(id);
+    const user = await User.findById(id).lean();
     if (!user) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
     }
+    
+    // Delete all associated files from R2
+    await deleteAllFiles(user);
+
     const result = await User.findByIdAndDelete(id);
 
     // Invalidate user profile caches
@@ -115,6 +120,9 @@ const updateProfile = async (
         }
     }
 
+    // Delete any replaced files from R2
+    await deleteReplacedFiles(existingUser, payload);
+
     const updatedUser: any = await User.findOneAndUpdate(
         { _id: userId, status: { $ne: USER_STATUS.DELETED } },
         payload,
@@ -158,10 +166,14 @@ const getProfile = async (user: JwtPayload) => {
 
 const deleteMyAccount = async (user: JwtPayload) => {
     const userId = user.authId || user.id;
-    const existingUser = await User.findById(userId);
+    const existingUser = await User.findById(userId).lean();
     if (!existingUser) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'Profile not found or deleted.');
     }
+    
+    // Delete all associated files from R2
+    await deleteAllFiles(existingUser);
+
     await User.findByIdAndDelete(userId);
 
     // Invalidate user profile caches

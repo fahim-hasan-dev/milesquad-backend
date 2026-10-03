@@ -5,6 +5,7 @@ import { StatusCodes } from 'http-status-codes'
 import path from 'path'
 import fs from 'fs'
 import sharp from 'sharp'
+import { uploadToR2 } from '../../utils/s3.util'
 
 type IFolderName =
   | 'image'
@@ -127,8 +128,11 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
 
             await Promise.all(
               fileArray.map(async (file) => {
-                const filePath = `/${fieldName}/${file.filename}`;
-                paths.push(filePath);
+                const fullPath = path.join(
+                  uploadsDir,
+                  fieldName,
+                  file.filename,
+                );
 
                 if (
                   ['image', 'images', 'nidFront', 'nidBack', 'drivingLicense', 'criminalReport', 'deliveryProof'].includes(
@@ -136,11 +140,6 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
                   ) &&
                   file.mimetype.startsWith('image/')
                 ) {
-                  const fullPath = path.join(
-                    uploadsDir,
-                    fieldName,
-                    file.filename,
-                  );
                   const tempPath = fullPath + '.opt';
 
                   try {
@@ -161,8 +160,22 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
                     fs.unlinkSync(fullPath);
                     fs.renameSync(tempPath, fullPath);
                   } catch (err) {
-                    console.error(`Failed to optimize ${filePath}:`, err);
+                    console.error(`Failed to optimize /${fieldName}/${file.filename}:`, err);
                   }
+                }
+
+                try {
+                  const fileKey = `${fieldName}/${file.filename}`;
+                  const r2Url = await uploadToR2(fullPath, fileKey, file.mimetype);
+
+                  if (fs.existsSync(fullPath)) {
+                    fs.unlinkSync(fullPath);
+                  }
+
+                  paths.push(r2Url);
+                } catch (uploadError) {
+                  console.error(`Failed to upload ${file.filename} to R2:`, uploadError);
+                  paths.push(`/${fieldName}/${file.filename}`);
                 }
               }),
             );

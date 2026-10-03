@@ -11,6 +11,7 @@ import { emailHelper } from '../../../helpers/emailHelper';
 import QueryBuilder from '../../builder/QueryBuilder';
 import bcrypt from 'bcrypt';
 import config from '../../../config';
+import { deleteReplacedFiles, deleteAllFiles } from '../../../utils/s3.util';
 
 const loginAdmin = async (payload: { email: string; password: string }) => {
     const email = payload.email.trim().toLowerCase();
@@ -132,6 +133,8 @@ const updateAdmin = async (id: string, payload: Partial<IAdmin>) => {
         }
     }
 
+    await deleteReplacedFiles(existingAdmin, payload);
+
     const result = await Admin.findByIdAndUpdate(id, payload, { new: true }).select('-password -authentication');
     return result;
 };
@@ -145,6 +148,8 @@ const deleteAdmin = async (id: string) => {
     if (admin.role === ADMIN_ROLES.SUPER_ADMIN) {
         throw new ApiError(StatusCodes.BAD_REQUEST, 'Cannot delete Super Admin');
     }
+
+    await deleteAllFiles(admin);
 
     return await Admin.findByIdAndDelete(id);
 };

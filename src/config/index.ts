@@ -39,6 +39,13 @@ export default {
         api_key: process.env.CLOUDINARY_API_KEY,
         api_secret: process.env.CLOUDINARY_API_SECRET
     },
+    r2: {
+        accountId: process.env.R2_ACCOUNT_ID,
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+        bucketName: process.env.R2_BUCKET_NAME,
+        publicUrl: process.env.R2_PUBLIC_URL
+    },
     frontend_url: process.env.FRONTEND_URL,
     backend_url: process.env.BACKEND_URL,
     logo_url: process.env.LOGO_URL,

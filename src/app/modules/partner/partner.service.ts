@@ -5,6 +5,7 @@ import QueryBuilder from "../../builder/QueryBuilder";
 import { IPartner } from "./partner.interface";
 import { Partner } from "./partner.model";
 import { cacheDelByPattern, getOrSetCache } from "../../../helpers/cacheHelper";
+import { deleteReplacedFiles } from "../../../utils/s3.util";
 
 const CACHE_TTL_PARTNERS = 3600; // 1 hour
 
@@ -87,6 +88,8 @@ const updatePartner = async (id: string, payload: Partial<IPartner>) => {
             throw new ApiError(StatusCodes.BAD_REQUEST, "Phone number already in use by another partner.");
         }
     }
+
+    await deleteReplacedFiles(partner, payload);
 
     const updatedPartner = await Partner.findByIdAndUpdate(id, payload, { new: true });
     await cacheDelByPattern("cache:partner:*");

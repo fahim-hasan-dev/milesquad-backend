@@ -6,6 +6,7 @@ import QueryBuilder from '../../builder/QueryBuilder';
 import { Counter } from '../counter/counter.model';
 import { NotificationService } from '../notification/notification.service';
 import { USER_ROLES } from '../../../enum/user';
+import { deleteAllFiles } from '../../../utils/s3.util';
 
 const getNextTicketCustomId = async (): Promise<string> => {
     const sequenceDocument = await Counter.findOneAndUpdate(
@@ -127,6 +128,9 @@ const updateSupportTicketStatus = async (
 
 const deleteSupportTicket = async (id: string): Promise<ISupportTicket> => {
     const ticket = await getSingleSupportTicket(id);
+    
+    await deleteAllFiles(ticket);
+    
     const deleted = await SupportTicket.findByIdAndDelete(ticket._id);
     if (!deleted) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'Support ticket not found for deletion');
