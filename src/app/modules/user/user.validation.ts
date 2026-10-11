@@ -17,6 +17,8 @@ export const userSignupSchema = z.object({
       nidBack: z.string().optional(),
       drivingLicense: z.string().optional(),
       criminalReport: z.string().optional(),
+      vehicleInsurance: z.string().optional(),
+      vehicleDocuments: z.string().optional(),
     }).optional(),
   })
 });
@@ -46,6 +48,8 @@ export const userUpdateSchema = z.object({
       nidBack: z.string().optional(),
       drivingLicense: z.string().optional(),
       criminalReport: z.string().optional(),
+      vehicleInsurance: z.string().optional(),
+      vehicleDocuments: z.string().optional(),
       profileVerification: z.nativeEnum(PROFILE_VERIFICATION_STATUS).optional(),
       rejectReason: z.string().optional(),
     }).optional(),

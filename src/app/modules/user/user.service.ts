@@ -107,6 +107,8 @@ const updateProfile = async (
             payload.driverInfo.nidBack ||
             payload.driverInfo.drivingLicense ||
             payload.driverInfo.criminalReport ||
+            payload.driverInfo.vehicleInsurance ||
+            payload.driverInfo.vehicleDocuments ||
             payload.driverInfo.vehicleType
         );
 

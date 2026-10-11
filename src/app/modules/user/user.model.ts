@@ -113,6 +113,8 @@ const UserSchema = new Schema<IUser, UserModel>(
                 nidBack: { type: String, default: "" },
                 drivingLicense: { type: String, default: "" },
                 criminalReport: { type: String, default: "" },
+                vehicleInsurance: { type: String, default: "" },
+                vehicleDocuments: { type: String, default: "" },
                 profileVerification: {
                     type: String,
                     enum: Object.values(PROFILE_VERIFICATION_STATUS),

@@ -17,6 +17,8 @@ type IFolderName =
   | 'criminalReport'
   | 'pdfDocument'
   | 'deliveryProof'
+  | 'vehicleInsurance'
+  | 'vehicleDocuments'
 
 interface ProcessedFiles {
   [key: string]: string | string[] | undefined
@@ -32,6 +34,8 @@ const uploadFields = [
   { name: 'criminalReport', maxCount: 1 },
   { name: 'pdfDocument', maxCount: 1 },
   { name: 'deliveryProof', maxCount: 5 },
+  { name: 'vehicleInsurance', maxCount: 1 },
+  { name: 'vehicleDocuments', maxCount: 1 },
 ] as const
 
 export const fileAndBodyProcessorUsingDiskStorage = () => {
@@ -74,6 +78,8 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
         criminalReport: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'],
         pdfDocument: ['application/pdf'],
         deliveryProof: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'],
+        vehicleInsurance: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'],
+        vehicleDocuments: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf'],
       };
 
       const fieldType = file.fieldname as IFolderName;
@@ -135,7 +141,7 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
                 );
 
                 if (
-                  ['image', 'images', 'nidFront', 'nidBack', 'drivingLicense', 'criminalReport', 'deliveryProof'].includes(
+                  ['image', 'images', 'nidFront', 'nidBack', 'drivingLicense', 'criminalReport', 'deliveryProof', 'vehicleInsurance', 'vehicleDocuments'].includes(
                     fieldName,
                   ) &&
                   file.mimetype.startsWith('image/')
@@ -190,6 +196,8 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
           ...(processedFiles.nidBack && { nidBack: processedFiles.nidBack }),
           ...(processedFiles.drivingLicense && { drivingLicense: processedFiles.drivingLicense }),
           ...(processedFiles.criminalReport && { criminalReport: processedFiles.criminalReport }),
+          ...(processedFiles.vehicleInsurance && { vehicleInsurance: processedFiles.vehicleInsurance }),
+          ...(processedFiles.vehicleDocuments && { vehicleDocuments: processedFiles.vehicleDocuments }),
         };
 
         req.body = {

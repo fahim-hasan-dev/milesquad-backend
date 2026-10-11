@@ -38,6 +38,8 @@ export type IUser = {
         nidBack?: string;
         drivingLicense?: string;
         criminalReport?: string;
+        vehicleInsurance?: string;
+        vehicleDocuments?: string;
         profileVerification: PROFILE_VERIFICATION_STATUS;
         rejectReason?: string;
         totalRating: number;

@@ -22,6 +22,8 @@ const createUserZodSchema = z.object({
       nidBack: z.string().optional(),
       drivingLicense: z.string().optional(),
       criminalReport: z.string().optional(),
+      vehicleInsurance: z.string().optional(),
+      vehicleDocuments: z.string().optional(),
     }).optional(),
   }),
 });
