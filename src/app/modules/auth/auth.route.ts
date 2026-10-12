@@ -66,4 +66,20 @@ router.delete(
 router.post('/access-token', AuthController.getAccessToken);
 router.post('/logout', AuthController.logOut);
 
+router.post(
+  '/add-fcm-token',
+  auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER),
+  validateRequest(AuthValidations.addFcmTokenZodSchema),
+  AuthController.addFcmToken,
+);
+
+router.post(
+  '/remove-fcm-token',
+  auth(USER_ROLES.CUSTOMER, USER_ROLES.DRIVER),
+  validateRequest(AuthValidations.removeFcmTokenZodSchema),
+  AuthController.removeFcmToken,
+);
+
 export const AuthRoutes = router;
+
+

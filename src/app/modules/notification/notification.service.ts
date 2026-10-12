@@ -6,6 +6,8 @@ import QueryBuilder from '../../builder/QueryBuilder';
 import { notificationQueue } from '../../../queues';
 import { getIO } from '../../../helpers/socketManager';
 import { logger } from '../../../shared/logger';
+import { Admin } from '../admin/admin.model';
+import { ADMIN_ROLES, USER_STATUS } from '../../../enum/user';
 
 const insertNotification = async (payload: Partial<INotification>): Promise<INotification> => {
     const result = await Notification.create(payload);
@@ -76,8 +78,62 @@ const getUnreadCountFromDB = async (user: JwtPayload) => {
     return { unreadCount };
 };
 
+const notifyAdminsOfNewDriver = async (driver: {
+    _id: any;
+    fullName: string;
+    phone: string;
+}) => {
+    try {
+        const admins = await Admin.find({ status: USER_STATUS.ACTIVE }).select('_id email fullName role');
+        const title = 'New Driver Registration Request';
+        const message = `${driver.fullName} (${driver.phone}) has completed onboarding and submitted a new driver verification request.`;
+        const screen = 'RIDERS';
+
+        for (const admin of admins) {
+            await insertNotification({
+                receiver: admin._id,
+                title,
+                message,
+                screen,
+                referenceId: driver._id,
+                type: admin.role || ADMIN_ROLES.SUPER_ADMIN,
+            });
+        }
+    } catch (error) {
+        logger.error('Failed to notify admins of new driver:', error);
+    }
+};
+
+const notifyAdminsOfDriverResubmission = async (driver: {
+    _id: any;
+    fullName: string;
+    phone: string;
+}) => {
+    try {
+        const admins = await Admin.find({ status: USER_STATUS.ACTIVE }).select('_id email fullName role');
+        const title = 'Driver Profile Resubmitted';
+        const message = `${driver.fullName} (${driver.phone}) has resubmitted their driver verification documents.`;
+        const screen = 'RIDERS';
+
+        for (const admin of admins) {
+            await insertNotification({
+                receiver: admin._id,
+                title,
+                message,
+                screen,
+                referenceId: driver._id,
+                type: admin.role || ADMIN_ROLES.SUPER_ADMIN,
+            });
+        }
+    } catch (error) {
+        logger.error('Failed to notify admins of driver resubmission:', error);
+    }
+};
+
 export const NotificationService = {
     insertNotification,
     getNotificationFromDB,
     getUnreadCountFromDB,
+    notifyAdminsOfNewDriver,
+    notifyAdminsOfDriverResubmission,
 };

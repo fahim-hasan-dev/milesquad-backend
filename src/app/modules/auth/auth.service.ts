@@ -13,6 +13,7 @@ import bcrypt from 'bcrypt';
 import { generateOtp } from '../../../utils/crypto';
 import { IUser } from '../user/user.interface';
 import sendSMS from '../../../shared/sendSMS';
+import { NotificationService } from '../notification/notification.service';
 
 export const createUser = async (payload: IUser) => {
   payload.phone = payload.phone?.trim();
@@ -272,6 +273,10 @@ const verifyAccount = async (
     { new: true }
   );
 
+  if (existingUser.role === USER_ROLES.DRIVER) {
+    NotificationService.notifyAdminsOfNewDriver(existingUser).catch(() => {});
+  }
+
   const tokens = AuthHelper.createToken(
     existingUser._id,
     existingUser.role,
@@ -477,6 +482,39 @@ const verifyEmail = async (token: string) => {
   return updatedUser;
 };
 
+const addFcmToken = async (user: JwtPayload, token: string) => {
+  const userId = user.authId || user.id;
+
+  const result = await User.findByIdAndUpdate(
+    userId,
+    { $addToSet: { fcmToken: token } },
+    { new: true }
+  ).select('fcmToken');
+
+  if (!result) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+  }
+
+  return result;
+};
+
+const removeFcmToken = async (user: JwtPayload, token: string) => {
+  const userId = user.authId || user.id;
+
+  const result = await User.findByIdAndUpdate(
+    userId,
+    { $pull: { fcmToken: token } },
+    { new: true }
+  ).select('fcmToken');
+
+  if (!result) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
+  }
+
+  return result;
+};
+
+
 export const AuthServices = {
   createUser,
   login,
@@ -488,4 +526,7 @@ export const AuthServices = {
   getAccessToken,
   changePassword,
   deleteAccount,
+  addFcmToken,
+  removeFcmToken,
 };
+

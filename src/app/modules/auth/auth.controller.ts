@@ -198,6 +198,31 @@ const verifyEmail = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const addFcmToken = catchAsync(async (req: Request, res: Response) => {
+  const { fcmToken } = req.body;
+  const result = await AuthServices.addFcmToken(req.user!, fcmToken);
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: 'FCM token added successfully',
+    data: result,
+  });
+});
+
+const removeFcmToken = catchAsync(async (req: Request, res: Response) => {
+  const { fcmToken } = req.body;
+  const result = await AuthServices.removeFcmToken(req.user!, fcmToken);
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: 'FCM token removed successfully',
+    data: result,
+  });
+});
+
+
+
+
 export const AuthController = {
   createUser,
   login: customLogin,
@@ -210,4 +235,7 @@ export const AuthController = {
   changePassword,
   deleteAccount,
   logOut,
+  addFcmToken,
+  removeFcmToken,
 };
+

@@ -2,6 +2,8 @@ import * as admin from 'firebase-admin';
 import path from 'path';
 import config from '../../../config';
 import { logger } from '../../../shared/logger';
+import { User } from '../user/user.model';
+import { Admin } from '../admin/admin.model';
 
 let isFirebaseInitialized = false;
 
@@ -51,7 +53,8 @@ const sendPushNotification = async (
         return;
     }
 
-    const tokens = Array.isArray(fcmTokens) ? fcmTokens : [fcmTokens];
+    const rawTokens = Array.isArray(fcmTokens) ? fcmTokens : [fcmTokens];
+    const tokens = Array.from(new Set(rawTokens.filter((t) => typeof t === 'string' && t.trim().length > 0)));
     if (tokens.length === 0) return;
 
     const stringifiedData: Record<string, string> = {};
@@ -62,17 +65,42 @@ const sendPushNotification = async (
     }
 
     try {
-        const results = await Promise.all(tokens.map(async (token) => {
-            const message: admin.messaging.Message = {
-                notification: { title, body },
-                data: stringifiedData,
-                token,
-            };
-            return admin.messaging().send(message);
-        }));
+        const message: admin.messaging.MulticastMessage = {
+            notification: { title, body },
+            data: stringifiedData,
+            tokens,
+        };
 
-        logger.info(`Push notifications sent to ${results.length} tokens.`);
-        return results;
+        const response = await admin.messaging().sendEachForMulticast(message);
+        logger.info(
+            `Push notifications sent: ${response.successCount} succeeded, ${response.failureCount} failed across ${tokens.length} tokens.`
+        );
+
+        if (response.failureCount > 0) {
+            const invalidTokens: string[] = [];
+            response.responses.forEach((resp, idx) => {
+                if (!resp.success && resp.error) {
+                    const errorCode = resp.error.code;
+                    if (
+                        errorCode === 'messaging/registration-token-not-registered' ||
+                        errorCode === 'messaging/invalid-registration-token' ||
+                        errorCode === 'messaging/invalid-argument'
+                    ) {
+                        invalidTokens.push(tokens[idx]);
+                    }
+                }
+            });
+
+            if (invalidTokens.length > 0) {
+                await Promise.all([
+                    User.updateMany({ fcmToken: { $in: invalidTokens } }, { $pull: { fcmToken: { $in: invalidTokens } } }),
+                    Admin.updateMany({ fcmToken: { $in: invalidTokens } }, { $pull: { fcmToken: { $in: invalidTokens } } }),
+                ]);
+                logger.info(`Cleaned up ${invalidTokens.length} unregistered/invalid FCM tokens from DB.`);
+            }
+        }
+
+        return response;
     } catch (error) {
         logger.error('Error sending push notification:', error);
     }
@@ -81,3 +109,4 @@ const sendPushNotification = async (
 export const PushNotificationService = {
     sendPushNotification,
 };
+

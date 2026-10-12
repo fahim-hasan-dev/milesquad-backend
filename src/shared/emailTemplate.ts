@@ -193,9 +193,9 @@ const resendOtp = (values: {
         <p style="color:#3a5a40; font-size:16px; line-height:1.6; margin-bottom:25px; text-align:center;">
           Hi <strong>${values.name}</strong>, 👋<br>
           ${isReset
-            ? 'You requested a new verification code to reset your Template password.'
-            : 'Here is your new verification code to complete your Template account setup.'
-          }<br>
+        ? 'You requested a new verification code to reset your Template password.'
+        : 'Here is your new verification code to complete your Template account setup.'
+      }<br>
           Use the code below to continue:
         </p>
 

@@ -26,6 +26,7 @@ export const updateAdminSchema = z.object({
     image: z.string().optional(),
     status: z.nativeEnum(USER_STATUS).optional(),
     role: z.nativeEnum(ADMIN_ROLES).optional(),
+    fcmToken: z.union([z.string(), z.array(z.string())]).optional(),
   })
 });
 

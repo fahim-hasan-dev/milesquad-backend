@@ -11,7 +11,7 @@ import { NotificationService } from '../notification/notification.service';
 import { cacheDel, cacheDelByPattern, getOrSetCache } from '../../../helpers/cacheHelper';
 import { deleteReplacedFiles, deleteAllFiles } from '../../../utils/s3.util';
 
-const CACHE_TTL_USER_PROFILE = 900; 
+const CACHE_TTL_USER_PROFILE = 900;
 
 const getAllUser = async (query: Record<string, unknown>) => {
     const userQueryBuilder = new QueryBuilder(User.find().select('-password -authentication'), query)
@@ -64,7 +64,7 @@ const deleteUser = async (id: string) => {
     if (!user) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
     }
-    
+
     // Delete all associated files from R2
     await deleteAllFiles(user);
 
@@ -101,6 +101,9 @@ const updateProfile = async (
         }, 0);
     }
 
+    let isDriverResubmission = false;
+    let isDriverNewOnboarding = false;
+
     if (existingUser.role === USER_ROLES.DRIVER && existingUser.driverInfo) {
         const hasDriverDocUpdates = payload.driverInfo && (
             payload.driverInfo.nidFront ||
@@ -119,6 +122,18 @@ const updateProfile = async (
                 profileVerification: PROFILE_VERIFICATION_STATUS.RESUBMITTED,
                 rejectReason: '',
             };
+            isDriverResubmission = true;
+        } else if (
+            hasDriverDocUpdates &&
+            existingUser.driverInfo.profileVerification === PROFILE_VERIFICATION_STATUS.PENDING &&
+            !existingUser.driverInfo.drivingLicense &&
+            !existingUser.driverInfo.nidFront
+        ) {
+            payload.driverInfo = {
+                ...existingUser.driverInfo,
+                ...payload.driverInfo,
+            };
+            isDriverNewOnboarding = true;
         }
     }
 
@@ -143,6 +158,12 @@ const updateProfile = async (
     await cacheDel(`cache:user:profile:${userId}`, `cache:user:single:${userId}`);
     if (existingUser.userId) {
         await cacheDel(`cache:user:single:${existingUser.userId}`);
+    }
+
+    if (isDriverResubmission) {
+        NotificationService.notifyAdminsOfDriverResubmission(updatedUser).catch(() => {});
+    } else if (isDriverNewOnboarding) {
+        NotificationService.notifyAdminsOfNewDriver(updatedUser).catch(() => {});
     }
 
     return updatedUser;
@@ -172,7 +193,7 @@ const deleteMyAccount = async (user: JwtPayload) => {
     if (!existingUser) {
         throw new ApiError(StatusCodes.NOT_FOUND, 'Profile not found or deleted.');
     }
-    
+
     // Delete all associated files from R2
     await deleteAllFiles(existingUser);
 

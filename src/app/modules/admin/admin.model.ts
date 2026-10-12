@@ -39,6 +39,10 @@ const AdminSchema = new Schema<IAdmin, AdminModel>(
             enum: Object.values(USER_STATUS),
             default: USER_STATUS.ACTIVE,
         },
+        fcmToken: {
+            type: [String],
+            default: [],
+        },
         authentication: {
             restrictionLeftAt: { type: Date, default: null },
             resetPassword: { type: Boolean, default: false },

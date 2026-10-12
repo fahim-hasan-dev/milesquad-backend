@@ -23,6 +23,7 @@ export type IAdmin = {
     role: ADMIN_ROLES;
     status: USER_STATUS;
     authentication: IAdminAuthentication;
+    fcmToken?: string[];
 };
 
 export type AdminModel = {

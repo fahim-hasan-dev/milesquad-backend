@@ -133,6 +133,10 @@ const updateAdmin = async (id: string, payload: Partial<IAdmin>) => {
         }
     }
 
+    if (payload.fcmToken && typeof payload.fcmToken === 'string') {
+        payload.fcmToken = [payload.fcmToken];
+    }
+
     await deleteReplacedFiles(existingAdmin, payload);
 
     const result = await Admin.findByIdAndUpdate(id, payload, { new: true }).select('-password -authentication');

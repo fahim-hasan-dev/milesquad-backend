@@ -74,6 +74,24 @@ const deleteAccountZodSchema = z.object({
   }),
 });
 
+const addFcmTokenZodSchema = z.object({
+  body: z.object({
+    fcmToken: z.string({
+      required_error: 'FCM token is required',
+    }).min(1, 'FCM token cannot be empty'),
+  }),
+});
+
+const removeFcmTokenZodSchema = z.object({
+  body: z.object({
+    fcmToken: z.string({
+      required_error: 'FCM token is required',
+    }).min(1, 'FCM token cannot be empty'),
+  }),
+});
+
+
+
 export const AuthValidations = {
   loginZodSchema,
   createUserZodSchema,
@@ -83,4 +101,7 @@ export const AuthValidations = {
   resendOtpZodSchema,
   changePasswordZodSchema,
   deleteAccount: deleteAccountZodSchema,
+  addFcmTokenZodSchema,
+  removeFcmTokenZodSchema,
 };
+
