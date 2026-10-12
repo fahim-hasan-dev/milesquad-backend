@@ -23,7 +23,7 @@ const createUserZodSchema = z.object({
       drivingLicense: z.string().optional(),
       criminalReport: z.string().optional(),
       vehicleInsurance: z.string().optional(),
-      vehicleDocuments: z.string().optional(),
+      vehicleDocuments: z.union([z.string(), z.array(z.string())]).optional(),
     }).optional(),
   }),
 });

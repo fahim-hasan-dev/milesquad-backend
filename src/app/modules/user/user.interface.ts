@@ -39,7 +39,7 @@ export type IUser = {
         drivingLicense?: string;
         criminalReport?: string;
         vehicleInsurance?: string;
-        vehicleDocuments?: string;
+        vehicleDocuments?: string[];
         profileVerification: PROFILE_VERIFICATION_STATUS;
         rejectReason?: string;
         totalRating: number;

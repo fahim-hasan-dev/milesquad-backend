@@ -52,7 +52,11 @@ export const createUser = async (payload: IUser) => {
       drivingLicense: payload.driverInfo?.drivingLicense || '',
       criminalReport: payload.driverInfo?.criminalReport || '',
       vehicleInsurance: payload.driverInfo?.vehicleInsurance || '',
-      vehicleDocuments: payload.driverInfo?.vehicleDocuments || '',
+      vehicleDocuments: Array.isArray(payload.driverInfo?.vehicleDocuments)
+        ? payload.driverInfo.vehicleDocuments
+        : payload.driverInfo?.vehicleDocuments
+        ? [payload.driverInfo.vehicleDocuments]
+        : [],
       profileVerification: PROFILE_VERIFICATION_STATUS.PENDING,
       rejectReason: '',
       totalRating: 0,

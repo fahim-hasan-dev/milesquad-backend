@@ -104,6 +104,10 @@ const updateProfile = async (
     let isDriverResubmission = false;
     let isDriverNewOnboarding = false;
 
+    if (payload.driverInfo?.vehicleDocuments && !Array.isArray(payload.driverInfo.vehicleDocuments)) {
+        payload.driverInfo.vehicleDocuments = [payload.driverInfo.vehicleDocuments];
+    }
+
     if (existingUser.role === USER_ROLES.DRIVER && existingUser.driverInfo) {
         const hasDriverDocUpdates = payload.driverInfo && (
             payload.driverInfo.nidFront ||
@@ -111,7 +115,7 @@ const updateProfile = async (
             payload.driverInfo.drivingLicense ||
             payload.driverInfo.criminalReport ||
             payload.driverInfo.vehicleInsurance ||
-            payload.driverInfo.vehicleDocuments ||
+            (Array.isArray(payload.driverInfo.vehicleDocuments) ? payload.driverInfo.vehicleDocuments.length > 0 : !!payload.driverInfo.vehicleDocuments) ||
             payload.driverInfo.vehicleType
         );
 

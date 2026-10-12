@@ -18,7 +18,7 @@ export const userSignupSchema = z.object({
       drivingLicense: z.string().optional(),
       criminalReport: z.string().optional(),
       vehicleInsurance: z.string().optional(),
-      vehicleDocuments: z.string().optional(),
+      vehicleDocuments: z.union([z.string(), z.array(z.string())]).optional(),
     }).optional(),
   })
 });
@@ -49,7 +49,7 @@ export const userUpdateSchema = z.object({
       drivingLicense: z.string().optional(),
       criminalReport: z.string().optional(),
       vehicleInsurance: z.string().optional(),
-      vehicleDocuments: z.string().optional(),
+      vehicleDocuments: z.union([z.string(), z.array(z.string())]).optional(),
       profileVerification: z.nativeEnum(PROFILE_VERIFICATION_STATUS).optional(),
       rejectReason: z.string().optional(),
     }).optional(),

@@ -35,7 +35,7 @@ const uploadFields = [
   { name: 'pdfDocument', maxCount: 1 },
   { name: 'deliveryProof', maxCount: 5 },
   { name: 'vehicleInsurance', maxCount: 1 },
-  { name: 'vehicleDocuments', maxCount: 1 },
+  { name: 'vehicleDocuments', maxCount: 10 },
 ] as const
 
 export const fileAndBodyProcessorUsingDiskStorage = () => {
@@ -197,8 +197,9 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
           ...(processedFiles.drivingLicense && { drivingLicense: processedFiles.drivingLicense }),
           ...(processedFiles.criminalReport && { criminalReport: processedFiles.criminalReport }),
           ...(processedFiles.vehicleInsurance && { vehicleInsurance: processedFiles.vehicleInsurance }),
-          ...(processedFiles.vehicleDocuments && { vehicleDocuments: processedFiles.vehicleDocuments }),
+          ...(processedFiles.vehicleDocuments && { vehicleDocuments: Array.isArray(processedFiles.vehicleDocuments) ? processedFiles.vehicleDocuments : [processedFiles.vehicleDocuments] }),
         };
+
 
         req.body = {
           ...req.body,
