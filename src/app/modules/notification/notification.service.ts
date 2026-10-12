@@ -21,6 +21,7 @@ const insertNotification = async (payload: Partial<INotification>): Promise<INot
         });
     }
 
+
     try {
         const io = getIO();
         if (result.receiver) {
