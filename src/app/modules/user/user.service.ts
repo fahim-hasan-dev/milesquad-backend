@@ -82,7 +82,7 @@ const updateProfile = async (
     user: JwtPayload,
     payload: Partial<IUser>
 ) => {
-    const userId = user.authId;
+    const userId = user.authId || user.id;
     const existingUser = await User.findById(userId);
 
     if (!existingUser) {
@@ -101,44 +101,104 @@ const updateProfile = async (
         }, 0);
     }
 
-    let isDriverResubmission = false;
-    let isDriverNewOnboarding = false;
+    if (typeof payload.driverInfo === 'string') {
+        try {
+            payload.driverInfo = JSON.parse(payload.driverInfo);
+        } catch (e) {}
+    }
+
+    if ((payload as any).vehicleType) {
+        (payload as any).driverInfo = {
+            ...(payload.driverInfo || {}),
+            vehicleType: (payload as any).vehicleType,
+        };
+        delete (payload as any).vehicleType;
+    }
 
     if (payload.driverInfo?.vehicleDocuments && !Array.isArray(payload.driverInfo.vehicleDocuments)) {
         payload.driverInfo.vehicleDocuments = [payload.driverInfo.vehicleDocuments];
     }
 
-    if (existingUser.role === USER_ROLES.DRIVER && existingUser.driverInfo) {
-        const hasDriverDocUpdates = payload.driverInfo && (
+    if (payload.driverInfo?.vehicleType) {
+        let vt = String(payload.driverInfo.vehicleType).toLowerCase().trim();
+        if (vt === 'bike') vt = 'motorcycle';
+        payload.driverInfo.vehicleType = vt as any;
+    }
+
+    let isDriverResubmission = false;
+    let isDriverNewOnboarding = false;
+
+    const isDriver = existingUser.role === USER_ROLES.DRIVER || payload.role === USER_ROLES.DRIVER || !!payload.driverInfo;
+
+    if (payload.driverInfo) {
+        payload.role = USER_ROLES.DRIVER;
+
+        const existingDriverInfo = existingUser.driverInfo
+            ? (typeof (existingUser.driverInfo as any).toObject === 'function'
+                ? (existingUser.driverInfo as any).toObject()
+                : existingUser.driverInfo)
+            : {};
+
+        const hasDriverDocUpdates = !!(
             payload.driverInfo.nidFront ||
             payload.driverInfo.nidBack ||
             payload.driverInfo.drivingLicense ||
             payload.driverInfo.criminalReport ||
             payload.driverInfo.vehicleInsurance ||
-            (Array.isArray(payload.driverInfo.vehicleDocuments) ? payload.driverInfo.vehicleDocuments.length > 0 : !!payload.driverInfo.vehicleDocuments) ||
+            (Array.isArray(payload.driverInfo.vehicleDocuments) && payload.driverInfo.vehicleDocuments.length > 0) ||
             payload.driverInfo.vehicleType
         );
 
-        if (hasDriverDocUpdates && existingUser.driverInfo.profileVerification === PROFILE_VERIFICATION_STATUS.REJECTED) {
-            payload.driverInfo = {
-                ...existingUser.driverInfo,
-                ...payload.driverInfo,
-                profileVerification: PROFILE_VERIFICATION_STATUS.RESUBMITTED,
-                rejectReason: '',
-            };
+        const currentVerificationStatus = existingDriverInfo.profileVerification || PROFILE_VERIFICATION_STATUS.PENDING;
+        let newVerificationStatus = currentVerificationStatus;
+        let rejectReason = existingDriverInfo.rejectReason || '';
+
+        if (hasDriverDocUpdates && currentVerificationStatus === PROFILE_VERIFICATION_STATUS.REJECTED) {
+            newVerificationStatus = PROFILE_VERIFICATION_STATUS.RESUBMITTED;
+            rejectReason = '';
             isDriverResubmission = true;
         } else if (
             hasDriverDocUpdates &&
-            existingUser.driverInfo.profileVerification === PROFILE_VERIFICATION_STATUS.PENDING &&
-            !existingUser.driverInfo.drivingLicense &&
-            !existingUser.driverInfo.nidFront
+            currentVerificationStatus === PROFILE_VERIFICATION_STATUS.PENDING &&
+            !existingDriverInfo.drivingLicense &&
+            !existingDriverInfo.nidFront
         ) {
-            payload.driverInfo = {
-                ...existingUser.driverInfo,
-                ...payload.driverInfo,
-            };
             isDriverNewOnboarding = true;
         }
+
+        const mergedVehicleDocuments = payload.driverInfo.vehicleDocuments !== undefined
+            ? payload.driverInfo.vehicleDocuments
+            : (existingDriverInfo.vehicleDocuments || []);
+
+        payload.driverInfo = {
+            vehicleType: payload.driverInfo.vehicleType || existingDriverInfo.vehicleType,
+            nidFront: payload.driverInfo.nidFront !== undefined ? payload.driverInfo.nidFront : (existingDriverInfo.nidFront || ''),
+            nidBack: payload.driverInfo.nidBack !== undefined ? payload.driverInfo.nidBack : (existingDriverInfo.nidBack || ''),
+            drivingLicense: payload.driverInfo.drivingLicense !== undefined ? payload.driverInfo.drivingLicense : (existingDriverInfo.drivingLicense || ''),
+            criminalReport: payload.driverInfo.criminalReport !== undefined ? payload.driverInfo.criminalReport : (existingDriverInfo.criminalReport || ''),
+            vehicleInsurance: payload.driverInfo.vehicleInsurance !== undefined ? payload.driverInfo.vehicleInsurance : (existingDriverInfo.vehicleInsurance || ''),
+            vehicleDocuments: mergedVehicleDocuments,
+            profileVerification: (payload.driverInfo.profileVerification || newVerificationStatus || PROFILE_VERIFICATION_STATUS.PENDING) as PROFILE_VERIFICATION_STATUS,
+            rejectReason: payload.driverInfo.rejectReason !== undefined ? payload.driverInfo.rejectReason : rejectReason,
+            totalRating: existingDriverInfo.totalRating ?? 0,
+            averageRating: existingDriverInfo.averageRating ?? 0,
+            wallet: existingDriverInfo.wallet ?? 0,
+        };
+    } else if (isDriver && !existingUser.driverInfo) {
+        payload.driverInfo = {
+            vehicleType: undefined,
+            nidFront: '',
+            nidBack: '',
+            drivingLicense: '',
+            criminalReport: '',
+            vehicleInsurance: '',
+            vehicleDocuments: [],
+            profileVerification: PROFILE_VERIFICATION_STATUS.PENDING,
+            rejectReason: '',
+            totalRating: 0,
+            averageRating: 0,
+            wallet: 0,
+        };
     }
 
     // Delete any replaced files from R2
@@ -147,7 +207,7 @@ const updateProfile = async (
     const updatedUser: any = await User.findOneAndUpdate(
         { _id: userId, status: { $ne: USER_STATUS.DELETED } },
         payload,
-        { new: true },
+        { new: true, runValidators: true },
     ).select('-password -authentication').lean();
 
     if (!updatedUser) {

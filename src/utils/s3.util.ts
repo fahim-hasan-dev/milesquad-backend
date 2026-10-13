@@ -87,13 +87,37 @@ const findR2Urls = (obj: any, visited = new WeakSet()): string[] => {
 };
 
 export const deleteReplacedFiles = async (oldData: any, newData: any) => {
-  const oldUrls = findR2Urls(oldData);
-  const newUrls = findR2Urls(newData);
+  if (!oldData || !newData || typeof newData !== 'object') return;
 
-  // Find URLs that exist in the old data but not in the new data
-  const urlsToDelete = oldUrls.filter(url => !newUrls.includes(url));
+  const getReplacedUrls = (oldObj: any, newObj: any): string[] => {
+    let urls: string[] = [];
+    if (!oldObj || typeof oldObj !== 'object') return urls;
 
-  // Delete them from R2 in parallel
+    const safeOld = typeof oldObj.toJSON === 'function' ? oldObj.toJSON() : oldObj;
+    const safeNew = typeof newObj.toJSON === 'function' ? newObj.toJSON() : newObj;
+
+    for (const key of Object.keys(safeNew)) {
+      const oldVal = safeOld[key];
+      const newVal = safeNew[key];
+
+      if (Array.isArray(oldVal) && Array.isArray(newVal)) {
+        oldVal.forEach((item) => {
+          if (typeof item === 'string' && config.r2.publicUrl && item.startsWith(config.r2.publicUrl) && !newVal.includes(item)) {
+            urls.push(item);
+          }
+        });
+      } else if (typeof newVal === 'object' && newVal !== null && typeof oldVal === 'object' && oldVal !== null) {
+        urls = urls.concat(getReplacedUrls(oldVal, newVal));
+      } else if (typeof oldVal === 'string' && config.r2.publicUrl && oldVal.startsWith(config.r2.publicUrl)) {
+        if (newVal !== oldVal) {
+          urls.push(oldVal);
+        }
+      }
+    }
+    return urls;
+  };
+
+  const urlsToDelete = Array.from(new Set(getReplacedUrls(oldData, newData)));
   await Promise.all(
     urlsToDelete.map(url => deleteFromR2(url).catch(err => console.error(`Failed to delete ${url}:`, err)))
   );

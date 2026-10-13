@@ -117,6 +117,36 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
           req.body = JSON.parse(req.body.data);
         }
 
+        if (typeof req.body?.driverInfo === 'string') {
+          try {
+            req.body.driverInfo = JSON.parse(req.body.driverInfo);
+          } catch (e) {
+            // keep as-is if parsing fails
+          }
+        }
+
+        if (req.body && typeof req.body === 'object') {
+          for (const key of Object.keys(req.body)) {
+            const match = key.match(/^driverInfo\[(.*?)\]$/) || key.match(/^driverInfo\.(.*?)$/);
+            if (match) {
+              const subKey = match[1];
+              if (!req.body.driverInfo || typeof req.body.driverInfo !== 'object') {
+                req.body.driverInfo = {};
+              }
+              req.body.driverInfo[subKey] = req.body[key];
+              delete req.body[key];
+            }
+          }
+
+          if (req.body.vehicleType) {
+            if (!req.body.driverInfo || typeof req.body.driverInfo !== 'object') {
+              req.body.driverInfo = {};
+            }
+            req.body.driverInfo.vehicleType = req.body.vehicleType;
+            delete req.body.vehicleType;
+          }
+        }
+
         if (!req.files) {
           return next();
         }
@@ -190,16 +220,23 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
           }),
         );
 
+        const rawDriverInfo = (typeof req.body.driverInfo === 'object' && req.body.driverInfo !== null)
+          ? req.body.driverInfo
+          : {};
+
         const driverInfo: Record<string, any> = {
-          ...(req.body.driverInfo || {}),
+          ...rawDriverInfo,
           ...(processedFiles.nidFront && { nidFront: processedFiles.nidFront }),
           ...(processedFiles.nidBack && { nidBack: processedFiles.nidBack }),
           ...(processedFiles.drivingLicense && { drivingLicense: processedFiles.drivingLicense }),
           ...(processedFiles.criminalReport && { criminalReport: processedFiles.criminalReport }),
           ...(processedFiles.vehicleInsurance && { vehicleInsurance: processedFiles.vehicleInsurance }),
-          ...(processedFiles.vehicleDocuments && { vehicleDocuments: Array.isArray(processedFiles.vehicleDocuments) ? processedFiles.vehicleDocuments : [processedFiles.vehicleDocuments] }),
+          ...(processedFiles.vehicleDocuments && {
+            vehicleDocuments: Array.isArray(processedFiles.vehicleDocuments)
+              ? processedFiles.vehicleDocuments
+              : [processedFiles.vehicleDocuments],
+          }),
         };
-
 
         req.body = {
           ...req.body,
