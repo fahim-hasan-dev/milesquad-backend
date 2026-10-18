@@ -137,14 +137,6 @@ export const fileAndBodyProcessorUsingDiskStorage = () => {
               delete req.body[key];
             }
           }
-
-          if (req.body.vehicleType) {
-            if (!req.body.driverInfo || typeof req.body.driverInfo !== 'object') {
-              req.body.driverInfo = {};
-            }
-            req.body.driverInfo.vehicleType = req.body.vehicleType;
-            delete req.body.vehicleType;
-          }
         }
 
         if (!req.files) {
