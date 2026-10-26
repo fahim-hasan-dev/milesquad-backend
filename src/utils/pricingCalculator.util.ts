@@ -97,7 +97,7 @@ export const calculateParcelPricing = (input: IPricingInput): IPricingOutput => 
     } else {
         riskIndexPercent = fareSetting?.riskIndex3 ?? 0;
     }
-    const goodInsurance = Number((toFraction(riskIndexPercent) * itemValue).toFixed(2));
+    const goodInsurance = Number(((riskIndexPercent / 100) * itemValue).toFixed(2));
 
     // 9. Direct cost = Base fee + Time cost + Fuel cost (Driver app)
     const directCost = Number((baseFee + timeCost + fuelCost).toFixed(2));
